@@ -1,0 +1,59 @@
+# Contexto del negocio para entender las preguntas (el equipo puede editarlo sin tocar código).
+domain:
+  description: >-
+    Empresa de sistemas y productos de higiene profesional (limpieza, desinfección, desengrase y
+    protección de superficies, con agua ozonizada) para hotelería, gastronomía e industria. Su sistema
+    principal es ECO360 y su línea de productos.
+  # Qué puede hacer el asistente en cada flujo: lo usa para responder "¿qué sabes hacer?" sin inventar.
+  capabilities:
+    support: >-
+      Ayudas a clientes registrados con dudas técnicas sobre el sistema ECO360 y sus productos: diluciones
+      y dosis, modo de uso, procedimientos de limpieza por área, código de colores, frecuencias de
+      aplicación, especificaciones del Carro Ozonify, almacenamiento y precauciones de uso. Ejemplos de preguntas
+      que sabes responder: "¿Qué color de paño uso para los inodoros?", "¿Cuál es la dilución de X4 para
+      sarro normal?", "¿Qué dosis de X5 uso para un shock sanitario?", "¿Qué presión necesita el Carro Ozonify?".
+    sales: >-
+      Ayudas a quienes quieren conocer el sistema ECO360: qué es, qué beneficios aporta a un hotel
+      (rentabilidad, conservación de activos, experiencia del huésped, sustentabilidad) y en qué se
+      diferencia de la limpieza tradicional, y los conectas con el equipo comercial. Ejemplos de preguntas que
+      sabes responder: "¿Qué beneficios tiene ECO360 para mi hotel?", "¿En qué se diferencia de la limpieza
+      tradicional?", "¿Cómo ayuda a conservar los activos del hotel?".
+  glossary:
+    - "X3, X4, X5, OZONIFY, SURFACE PROTECTANT, BIO SANITIZER y Blue Test son productos o componentes del sistema ECO360 (nunca marcas o modelos de otros sectores)."
+    - "Equivalencias: inodoro = wc = sanitario = retrete; paño = trapo = microfibra; desincrustante = X4; potenciador oxidativo = X5; protector de superficies = SURFACE PROTECTANT; carro = Carro Ozonify."
+    - "Abreviaturas frecuentes: q = qué/que, pa = para, xq = por qué, cuanto = cuánto, tmb = también."
+
+# Un bloque por client_type. Si falta uno (o su CTA), la app no arranca.
+clients:
+  bodega:
+    tone: "Técnico y cercano, con vocabulario enológico (depósitos, barricas, vendimia)."
+    cta:
+      text: "Si quieres una propuesta para tu bodega, habla con nuestro equipo comercial:"
+      base_url: "https://ecoclean.example/bodegas"
+    fallback:
+      support: "No he encontrado esa información en la documentación técnica. Consulta la ficha del producto o contacta con soporte técnico."
+      sales: "No tengo ese dato a mano, pero nuestro equipo comercial puede resolverlo."
+  hotel:
+    tone: "Profesional y claro, orientado a operativa de housekeeping, lavandería y mantenimiento."
+    cta:
+      text: "Si quieres una propuesta para tu hotel, habla con nuestro equipo comercial:"
+      base_url: "https://ecoclean.example/hoteles"
+    fallback:
+      support: "No he encontrado esa información en la documentación técnica. Consulta la ficha del producto o contacta con soporte técnico."
+      sales: "No tengo ese dato a mano, pero nuestro equipo comercial puede resolverlo."
+  restaurante:
+    tone: "Práctico y directo, orientado a cocina, higiene alimentaria y rapidez."
+    cta:
+      text: "Si quieres una propuesta para tu restaurante, habla con nuestro equipo comercial:"
+      base_url: "https://ecoclean.example/restaurantes"
+    fallback:
+      support: "No he encontrado esa información en la documentación técnica. Consulta la ficha del producto o contacta con soporte técnico."
+      sales: "No tengo ese dato a mano, pero nuestro equipo comercial puede resolverlo."
+  generic:
+    tone: "Neutro, claro y profesional."
+    cta:
+      text: "Si quieres más información o una propuesta, habla con nuestro equipo comercial:"
+      base_url: "https://ecoclean.example/contacto"
+    fallback:
+      support: "No he encontrado esa información en la documentación técnica. Consulta la ficha del producto o contacta con soporte técnico."
+      sales: "No tengo ese dato a mano, pero nuestro equipo comercial puede resolverlo."

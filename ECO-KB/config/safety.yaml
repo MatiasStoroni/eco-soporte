@@ -1,0 +1,30 @@
+# Safety gate determinista: si coincide algo, se responde con texto enlatado y NO se llama al LLM.
+keywords:
+  - mezclar
+  - mezcla con
+  - lejía
+  - lejia
+  - amoniaco
+  - ingerir
+  - ingestión
+  - ingestion
+  - tragado
+  - me he bebido
+  - en los ojos
+  - en la piel
+  - salpicadura
+  - ventilación
+  - ventilacion
+  - intoxicación
+  - intoxicacion
+  - inhalar
+  - vapores
+patterns:
+  - '\b(mezcl\w+|junt\w+)\b.*\b(productos?|quimic\w+|químic\w+)\b'
+  - '\b(contacto|salpic\w+)\b.*\b(ojos?|piel)\b'
+response: >-
+  Esta consulta afecta a la seguridad. No puedo darte indicaciones sobre mezclas, ingestión,
+  contacto con ojos/piel o ventilación. Consulta la Ficha de Datos de Seguridad (SDS) del
+  producto. En caso de exposición o ingestión, llama de inmediato a emergencias (112) o al
+  Servicio de Información Toxicológica (+34 91 562 04 20), y contacta con tu responsable de
+  seguridad o con nuestro soporte técnico.

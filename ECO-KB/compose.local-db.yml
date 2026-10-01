@@ -1,0 +1,23 @@
+# Postgres LOCAL para desarrollo y tests de integración (NO se usa en el servidor).
+#   docker compose -f compose.local-db.yml up -d
+services:
+  db:
+    image: pgvector/pgvector:pg18
+    ports:
+      - 127.0.0.1:${DB_PORT:-5433}:5432  # solo localhost
+    environment:
+      POSTGRES_USER: ecokb
+      POSTGRES_PASSWORD: ecokb
+      POSTGRES_DB: ecokb
+    volumes:
+      - db_data:/var/lib/postgresql
+      - ./sql:/sql:ro
+      - ./sql/local-init.sh:/docker-entrypoint-initdb.d/00-local-init.sh:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ecokb -d ecokb']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  db_data:

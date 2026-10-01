@@ -1,0 +1,30 @@
+# Despliegue en el servidor: NO levanta Postgres. Usa el Postgres existente (red compartida).
+#   docker compose up -d --build
+# El contenedor se une solo a la red externa; no hace falta `docker network connect`.
+# La red debe existir ya (`docker network ls`); si no: docker network create servicios_compartidos
+services:
+  api:
+    build: .
+    restart: unless-stopped
+    env_file: ${ENV_FILE:-.env}   # ver .env.server.example (URLs con host "db", claves, modelos)
+    ports:
+      - "${API_PORT:-8000}:8000"   # acceso por IP del servidor desde la LAN
+    networks:
+      - shared
+
+  # Sincronización con Google Drive (opcional): docker compose --profile drive up -d
+  sync:
+    build: .
+    profiles: ["drive"]
+    restart: unless-stopped
+    env_file: ${ENV_FILE:-.env}
+    command: ["python", "-m", "eco_kb.drive.sync", "--loop"]
+    volumes:
+      - ./secrets:/app/secrets
+    networks:
+      - shared
+
+networks:
+  shared:
+    external: true
+    name: ${SHARED_NETWORK:-servicios_compartidos}
