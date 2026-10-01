@@ -9,9 +9,9 @@ services:
     restart: unless-stopped
     env_file: ${API_ENV_FILE:-./ECO-KB/.env}   # GOOGLE_API_KEY, modelos, umbrales
     environment:                                 # las URLs de BD se fijan aquí (anulan las del .env)
-      DATABASE_URL_ADMIN: postgresql://ecokb:${ECOKB_ADMIN_PASSWORD:-ecokb}@${DB_HOST:-db}:5432/ecokb
-      DATABASE_URL_SUPPORT_RO: postgresql://rag_support_ro:${ECOKB_SUPPORT_PASSWORD:-support_ro_dev}@${DB_HOST:-db}:5432/ecokb
-      DATABASE_URL_SALES_RO: postgresql://rag_sales_ro:${ECOKB_SALES_PASSWORD:-sales_ro_dev}@${DB_HOST:-db}:5432/ecokb
+      DATABASE_URL_ADMIN: ${DOCKER_DATABASE_URL_ADMIN:-postgresql://eco:eco@postgres-server:5432/ecokb}
+      DATABASE_URL_SUPPORT_RO: ${DOCKER_DATABASE_URL_SUPPORT_RO:-postgresql://rag_support_ro:${ECOKB_SUPPORT_PASSWORD:-support_ro_dev}@postgres-server:5432/ecokb}
+      DATABASE_URL_SALES_RO: ${DOCKER_DATABASE_URL_SALES_RO:-postgresql://rag_sales_ro:${ECOKB_SALES_PASSWORD:-sales_ro_dev}@postgres-server:5432/ecokb}
     ports:
       - "127.0.0.1:${API_PORT:-8000}:8000"       # solo para depuración local (/docs); los usuarios entran por la vista
     networks: [default, shared]
