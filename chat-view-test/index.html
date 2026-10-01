@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ECO-KB · Chat de prueba</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="topbar">
+        <div class="brand">ECO-KB <span>chat de prueba</span></div>
+        <div id="health" class="health" title="Estado de /health"><i></i><span>comprobando…</span></div>
+      </header>
+
+      <section class="controls">
+        <label class="switch">
+          <input type="checkbox" id="registered" checked />
+          <span class="track"></span>
+          <span id="registeredLabel">Registrado · soporte</span>
+        </label>
+        <label class="field">Tipo de cliente
+          <select id="clientType">
+            <option value="hotel">hotel</option>
+            <option value="bodega">bodega</option>
+            <option value="restaurante">restaurante</option>
+            <option value="generic">generic</option>
+          </select>
+        </label>
+        <label class="field">Idioma
+          <input id="language" value="es" size="3" />
+        </label>
+        <div class="session">sesión <code id="sessionId"></code></div>
+        <button id="newChat" class="ghost">Nueva conversación</button>
+      </section>
+
+      <main id="messages" class="messages"></main>
+
+      <div id="examples" class="examples"></div>
+
+      <form id="form" class="composer">
+        <textarea id="input" rows="1" placeholder="Escribe tu mensaje… (Enter envía, Shift+Enter salto de línea)"></textarea>
+        <button id="send" type="submit">Enviar</button>
+      </form>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
