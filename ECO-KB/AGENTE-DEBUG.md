@@ -76,7 +76,7 @@ out = g.invoke({"session_id": uuid.uuid4().hex, "is_registered": True, "client_t
 for e in out["audit_log"]: print({k: v for k, v in e.items() if k != "id"})
 ```
 Por HTTP (el contenedor `api` NO recarga código solo; tras tocar código: `docker compose up -d --build` en `demo-eco/`):
-`POST http://localhost:8080/api/chat` (vía vista) o `http://localhost:8000/chat` (directo).
+`POST http://localhost:8090/api/chat` (vía vista) o `http://localhost:8000/chat` (directo).
 
 Inspeccionar la KB: `docker exec eco-kb-db-1 psql -U ecokb -d ecokb -c "select chunk_id, section_path, left(content,120) from kb_chunks_support where ..."`
 (Postgres local de desarrollo; tablas `kb_chunks_support` / `kb_chunks_sales`).

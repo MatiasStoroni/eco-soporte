@@ -10,7 +10,7 @@ cp .env.example .env     # opcional: red, contraseñas, puertos
 docker compose up -d --build
 ```
 
-- Vista: `http://<ip>:8080` (su servidor reenvía `/api/*` a la API, mismo origen, sin CORS; acepta cualquier `Host`,
+- Vista: `http://<ip>:8090` (su servidor reenvía `/api/*` a la API, mismo origen, sin CORS; acepta cualquier `Host`,
   así que puedes ponerle delante tu propio proxy).
 - API (solo depuración, localhost): `http://localhost:8000/docs`.
 - Levanta su propio Postgres con pgvector, el contenedor `eco-db` (sin puerto publicado; volumen `eco_db_data`).
