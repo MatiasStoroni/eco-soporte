@@ -119,10 +119,15 @@ function addBot(data, ms) {
     fb ? `<span class="badge fb-${esc(fb)}" title="${esc(FALLBACKS[fb] || fb)}">${esc(fb)}</span>` : '',
     `<span class="badge muted">${(ms / 1000).toFixed(1)} s</span>`,
   ].join('')
-  const sources = (data.sources || []).length
-    ? `<div class="sources"><b>Fuentes</b><ul>${data.sources
-        .map((s) => `<li>${esc(s.title)}${s.section ? ` <span>· ${esc(s.section)}</span>` : ''}</li>`)
-        .join('')}</ul></div>`
+  const byTitle = new Map()
+  for (const s of data.sources || []) {
+    if (!byTitle.has(s.title)) byTitle.set(s.title, [])
+    if (s.section) byTitle.get(s.title).push(s.section)
+  }
+  const sources = byTitle.size
+    ? `<details class="sources"><summary>📄 Fuentes (${byTitle.size})</summary><ul>${[...byTitle]
+        .map(([t, secs]) => `<li>${esc(t)}${secs.length ? `<span>${secs.map(esc).join(' · ')}</span>` : ''}</li>`)
+        .join('')}</ul></details>`
     : ''
   const cta = data.cta_url
     ? `<a class="cta" href="${esc(data.cta_url)}" target="_blank" rel="noopener noreferrer" title="${esc(data.cta_url)}">Hablar con el equipo comercial ↗</a>`
@@ -210,7 +215,7 @@ async function send(text, showUser = true) {
 }
 
 function updateLabel() {
-  els.registeredLabel.textContent = els.registered.checked ? 'Registrado · soporte' : 'No registrado · ventas'
+  els.registeredLabel.textContent = els.registered.checked ? 'Cliente (dar soporte)' : 'No cliente (ventas)'
 }
 
 function resetChat(reason) {
@@ -263,7 +268,7 @@ for (const ex of EXAMPLES) {
   b.type = 'button'
   b.className = 'chip'
   b.textContent = ex.text
-  b.title = `${ex.registered ? 'registrado' : 'no registrado'} · ${ex.client}`
+  b.title = `${ex.registered ? 'cliente' : 'no cliente'} · ${ex.client}`
   b.onclick = () => {
     if (busy) return
     const changed = els.registered.checked !== ex.registered || els.clientType.value !== ex.client
