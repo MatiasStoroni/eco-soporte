@@ -13,17 +13,14 @@ docker compose up -d --build
 - Vista: `http://<ip>:8080` (su servidor reenvía `/api/*` a la API, mismo origen, sin CORS; acepta cualquier `Host`,
   así que puedes ponerle delante tu propio proxy).
 - API (solo depuración, localhost): `http://localhost:8000/docs`.
-- No levanta Postgres: se une a la red `SHARED_NETWORK` (por defecto `servicios_compartidos`) donde ya vive, y lo
-  ve como `DB_HOST` (por defecto `db`). La unión a la red es automática en cada `up`.
+- Levanta su propio Postgres con pgvector, el contenedor `eco-db` (sin puerto publicado; volumen `eco_db_data`).
+  La primera vez crea la base `ecokb`, el admin `eco` y los roles de solo lectura (`ECO-KB/sql/init-db.sh`).
 - La clave `GOOGLE_API_KEY` y los modelos salen de `ECO-KB/.env` (`ECO-KB/.env.server.example` es la plantilla).
-- Base/usuarios/esquema en el Postgres compartido: `ECO-KB/scripts/bootstrap-db.sh` (una vez), y luego la ingesta
-  de documentos (ver README de `ECO-KB`).
-
-### En esta máquina de desarrollo (sin red compartida)
+- Tras el primer `up`, ingerir los documentos:
 
 ```bash
-cd ECO-KB && docker compose -f compose.local-db.yml up -d && cd ..     # Postgres local
-SHARED_NETWORK=eco-kb_default docker compose up -d --build
+docker compose run --rm -e KB_DIR=docs/estructurados -v ./ECO-KB/docs:/app/docs:ro api python -m eco_kb.ingest.run
 ```
 
-Parar: `docker compose down`. Logs: `docker compose logs -f api web`.
+Consultar la base: `docker exec -it eco-db psql -U eco -d ecokb`.
+Parar: `docker compose down` (con `-v` borra también la base). Logs: `docker compose logs -f api web db`.

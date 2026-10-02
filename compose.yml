@@ -1,20 +1,43 @@
-# Levanta la vista de chat + la API del chatbot. NO levanta Postgres: usa uno existente por red.
+# Levanta la vista de chat + la API del chatbot + su Postgres propio (pgvector), "eco-db".
 #   docker compose up -d --build
 # Vista: http://<ip>:${WEB_PORT:-8080}   (el servidor de la vista reenvía /api/* a la API: sin CORS)
+# La base, los usuarios y el esquema se crean solos la PRIMERA vez (volumen vacío); después hay que ingerir la KB.
 name: eco-demo
 
 services:
+  db:
+    image: pgvector/pgvector:pg18
+    container_name: eco-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: eco                                    # admin de la API (ingesta, historial)
+      POSTGRES_PASSWORD: ${ECOKB_ADMIN_PASSWORD:-eco}
+      POSTGRES_DB: ecokb
+      ECOKB_SUPPORT_PASSWORD: ${ECOKB_SUPPORT_PASSWORD:-support_ro_dev}
+      ECOKB_SALES_PASSWORD: ${ECOKB_SALES_PASSWORD:-sales_ro_dev}
+    volumes:
+      - eco_db_data:/var/lib/postgresql
+      - ./ECO-KB/sql:/sql:ro
+      - ./ECO-KB/sql/init-db.sh:/docker-entrypoint-initdb.d/00-init-db.sh:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U eco -d ecokb']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   api:
     build: ./ECO-KB
     restart: unless-stopped
     env_file: ${API_ENV_FILE:-./ECO-KB/.env}   # GOOGLE_API_KEY, modelos, umbrales
     environment:                                 # las URLs de BD se fijan aquí (anulan las del .env)
-      DATABASE_URL_ADMIN: ${DOCKER_DATABASE_URL_ADMIN:-postgresql://eco:eco@postgres-server:5432/ecokb}
-      DATABASE_URL_SUPPORT_RO: ${DOCKER_DATABASE_URL_SUPPORT_RO:-postgresql://rag_support_ro:${ECOKB_SUPPORT_PASSWORD:-support_ro_dev}@postgres-server:5432/ecokb}
-      DATABASE_URL_SALES_RO: ${DOCKER_DATABASE_URL_SALES_RO:-postgresql://rag_sales_ro:${ECOKB_SALES_PASSWORD:-sales_ro_dev}@postgres-server:5432/ecokb}
+      DATABASE_URL_ADMIN: postgresql://eco:${ECOKB_ADMIN_PASSWORD:-eco}@eco-db:5432/ecokb
+      DATABASE_URL_SUPPORT_RO: postgresql://rag_support_ro:${ECOKB_SUPPORT_PASSWORD:-support_ro_dev}@eco-db:5432/ecokb
+      DATABASE_URL_SALES_RO: postgresql://rag_sales_ro:${ECOKB_SALES_PASSWORD:-sales_ro_dev}@eco-db:5432/ecokb
+    depends_on:
+      db:
+        condition: service_healthy
     ports:
       - "127.0.0.1:${API_PORT:-8000}:8000"       # solo para depuración local (/docs); los usuarios entran por la vista
-    networks: [default, shared]
 
   web:
     build: ./chat-view-test
@@ -24,10 +47,6 @@ services:
         condition: service_healthy
     ports:
       - "${WEB_PORT:-8080}:8080"
-    networks: [default]
 
-networks:
-  # Red del Postgres existente. Se une sola al hacer `up`: no hace falta `docker network connect`.
-  shared:
-    external: true
-    name: ${SHARED_NETWORK:-servicios_compartidos}
+volumes:
+  eco_db_data:
