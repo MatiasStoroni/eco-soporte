@@ -25,6 +25,7 @@ class Settings(BaseSettings):
 
     clients_path: str = "config/clients.yaml"
     safety_path: str = "config/safety.yaml"
+    handoff_path: str = "config/handoff.yaml"
     kb_dir: str = "kb"
 
     # Google Drive (fuente de la KB en producción)
@@ -32,6 +33,9 @@ class Settings(BaseSettings):
     google_oauth_client_secret_path: str = "secrets/google_client_secret.json"
     google_oauth_token_path: str = "secrets/google_token.json"
     drive_sync_interval_minutes: int = 15
+
+    # Panel de administración (/admin/*). Vacío = panel desactivado.
+    admin_token: str = ""
 
 
 @lru_cache

@@ -26,9 +26,10 @@ Postgres + pgvector. Repos: `demo-eco/ECO-KB` (API) y `demo-eco/chat-view-test` 
 
 ```
 validate_session → safety_gate ─┬─ unsafe → safety_response (texto enlatado, sin LLM)  [fallback_reason=safety]
-                                └─ safe → classify_intent ─┬─ business_question → router ─┬─ support_rag → finalize_support
-                                                           │                              └─ sales_rag   → finalize_sales (+CTA)
-                                                           └─ greeting|smalltalk|capabilities|off_topic|unclear → converse
+                                └─ safe → handoff_gate ─┬─ pide una persona → handoff_response (texto fijo, sin LLM) [intent=handoff]
+                                                        └─ no → classify_intent ─┬─ business_question → router ─┬─ support_rag → finalize_support
+                                                                                 │                              └─ sales_rag   → finalize_sales (+CTA)
+                                                                                 └─ greeting|smalltalk|capabilities|off_topic|unclear → converse
  *_rag: rewrite_query → retrieve → grade_documents → generate → check_grounding → check_answer → finalize
         · grade sin docs relevantes: reintenta rewrite (hasta MAX_RET=2 recuperaciones) → si no, no_answer
         · grounding o answer_check falla: regenera con feedback (hasta MAX_GEN=3 generaciones) → si no, no_answer
@@ -59,7 +60,7 @@ Parámetros (`.env`): `MIN_VECTOR_SCORE=0.45`, `TOP_K=8`, candidatos 20, `MAX_RE
 `intent`: `business_question|greeting|smalltalk|capabilities|off_topic|unclear|safety`.
 
 `audit_log` (solo el turno actual) es tu traza. Eventos:
-`turn_start(flow, client_type, filter)` · `safety_gate(flagged)` · `classify_intent(intent, reason)` ·
+`turn_start(flow, client_type, filter)` · `safety_gate(flagged)` · `handoff_gate(requested)` · `handoff_response` · `classify_intent(intent, reason)` ·
 `rewrite_query(intent, queries, retry)` · `retrieve(queries, chunk_ids)` · `grade_documents(candidates, relevant_ids)` ·
 `generate(attempt, cited)` · `check_grounding(ok, reason: no_citations|unknown_citations|numeric_mismatch|llm_ungrounded)` ·
 `check_answer(ok, reason)` · `no_answer(reason)` · `finalize_support|finalize_sales` · `converse(intent)` ·

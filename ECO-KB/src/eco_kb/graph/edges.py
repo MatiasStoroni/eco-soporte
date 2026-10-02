@@ -9,6 +9,10 @@ def after_safety(state: dict) -> str:
     return "unsafe" if state.get("safety_flag") else "safe"
 
 
+def after_handoff(state: dict) -> str:
+    return "handoff" if state.get("handoff_requested") else "continue"
+
+
 def after_intent(state: dict) -> str:
     """Solo las preguntas de negocio llegan al RAG; el resto lo atiende el nodo conversacional."""
     return "business" if state.get("intent", "business_question") == "business_question" else "chitchat"

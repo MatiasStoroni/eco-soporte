@@ -1,0 +1,16 @@
+/* Paleta basada en eco360 / secondskin.com.ar: amarillo #FFD70A, aqua #7EBEC5, gris violáceo #514F5B, Poppins. */
+:root {
+  --yellow: #ffd70a; --yellow-d: #f2c200; --aqua: #7ebec5; --aqua-d: #4f9aa2; --aqua-soft: #e8f4f5;
+  --ink: #514f5b; --text: #2f2d36; --muted: #8a8794; --line: #ebe8ef;
+  --bg: #f6f5f1; --panel: #ffffff; --bot: #ffffff; --soft: #f7f6f9;
+  --warn: #c2690c; --err: #c0392b; --ok: #3aa776;
+  --shadow: 0 1px 2px rgba(81, 79, 91, .06), 0 4px 16px rgba(81, 79, 91, .07);
+  --radius: 18px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ink: #e9e7ee; --text: #ecebf0; --muted: #a09dab; --line: #34323b;
+    --bg: #18171c; --panel: #222128; --bot: #2a2930; --soft: #2a2930; --aqua-soft: #23363a; --aqua-d: #8fcbd1;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 4px 16px rgba(0, 0, 0, .25);
+  }
+}

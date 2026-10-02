@@ -1,3 +1,5 @@
+import { FALLBACKS, answerText, esc, groupSources, renderMarkdown, sourcesList } from './shared.js'
+
 const API = '/api'
 const TIMEOUT_MS = 90000
 
@@ -15,6 +17,7 @@ const els = {
   newChat: $('newChat'),
   health: $('health'),
   examples: $('examples'),
+  handoff: $('handoff'),
 }
 
 const EXAMPLES = [
@@ -24,54 +27,14 @@ const EXAMPLES = [
   { text: '¿Puedo mezclar el producto con lejía?', registered: true, client: 'hotel' },
 ]
 
-const FALLBACKS = {
-  no_documents: 'No se encontró información relevante',
-  ungrounded: 'Sin respuesta respaldada por documentos',
-  answer_mismatch: 'La respuesta no contestaba la pregunta',
-  safety: 'Respuesta de seguridad (enlatada, sin LLM)',
-}
-
 let sessionId = crypto.randomUUID()
 let busy = false
 
-const esc = (s) =>
-  String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])
-
-// Markdown mínimo (negritas, cursiva, código, listas, enlaces) sobre texto escapado.
-function renderMarkdown(src) {
-  const inline = (t) =>
-    esc(t)
-      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-      .replace(/(^|[\s(])\*(?!\s)(.+?)\*(?=[\s).,;:!?]|$)/g, '$1<em>$2</em>')
-      .replace(/`([^`]+)`/g, '<code>$1</code>')
-      .replace(/(https?:\/\/[^\s<]+[^\s<.,;:!?)])/g, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>')
-  const out = []
-  let list = null
-  const close = () => {
-    if (list) out.push(`</${list}>`)
-    list = null
-  }
-  for (const line of src.split('\n')) {
-    const ul = line.match(/^\s*[-*•]\s+(.*)/)
-    const ol = line.match(/^\s*\d+[.)]\s+(.*)/)
-    const h = line.match(/^#{1,6}\s+(.*)/)
-    if (ul || ol) {
-      const tag = ul ? 'ul' : 'ol'
-      if (list !== tag) {
-        close()
-        out.push(`<${tag}>`)
-        list = tag
-      }
-      out.push(`<li>${inline((ul || ol)[1])}</li>`)
-    } else {
-      close()
-      if (h) out.push(`<p><strong>${inline(h[1])}</strong></p>`)
-      else if (line.trim()) out.push(`<p>${inline(line)}</p>`)
-    }
-  }
-  close()
-  return out.join('')
-}
+// Derivación a humano: estado de la conversación (bot | pending | human) y polling de mensajes del equipo.
+let handoffStatus = 'bot'
+let lastUpdateId = 0
+let pollTimer = null
+const HANDOFF_LABELS = { pending: 'Derivada al equipo', human: 'Te atiende una persona del equipo' }
 
 function append(node) {
   els.messages.appendChild(node)
@@ -97,6 +60,52 @@ function addSystem(text) {
   append(d)
 }
 
+function addNotice(text) {
+  const d = el('system notice', '')
+  d.textContent = text
+  append(d)
+}
+
+function addHuman(m) {
+  const name = m.author || 'Equipo ECO360'
+  append(
+    el(
+      'msg bot human',
+      `<div class="avatar person" aria-hidden="true">${esc(name.trim()[0] || '?').toUpperCase()}</div>
+      <div class="bubble"><div class="who">${esc(name)} · equipo</div><div class="answer">${renderMarkdown(m.content)}</div></div>`,
+    ),
+  )
+}
+
+function setHandoff(status) {
+  if (!status || status === handoffStatus) return
+  handoffStatus = status
+  els.handoff.hidden = status === 'bot'
+  els.handoff.className = `handoff ${status}`
+  els.handoff.querySelector('span').textContent = HANDOFF_LABELS[status] || ''
+  clearInterval(pollTimer)
+  pollTimer = status === 'bot' ? null : setInterval(pollUpdates, status === 'human' ? 3000 : 5000)
+  if (status !== 'bot') pollUpdates()
+}
+
+async function pollUpdates() {
+  const sid = sessionId
+  try {
+    const r = await fetch(`${API}/chat/${encodeURIComponent(sid)}/updates?after=${lastUpdateId}`)
+    if (!r.ok || sid !== sessionId) return
+    const data = await r.json()
+    for (const m of data.messages) {
+      if (m.id <= lastUpdateId) continue
+      lastUpdateId = m.id
+      if (m.role === 'human') addHuman(m)
+      else addSystem(m.content)
+    }
+    setHandoff(data.status)
+  } catch {
+    /* sin conexión: se reintenta en el próximo ciclo */
+  }
+}
+
 function addTyping() {
   const d = el('msg bot', `${AVATAR}<div class="bubble typing"><span></span><span></span><span></span><em>escribiendo…</em></div>`)
   append(d)
@@ -119,15 +128,9 @@ function addBot(data, ms) {
     fb ? `<span class="badge fb-${esc(fb)}" title="${esc(FALLBACKS[fb] || fb)}">${esc(fb)}</span>` : '',
     `<span class="badge muted">${(ms / 1000).toFixed(1)} s</span>`,
   ].join('')
-  const byTitle = new Map()
-  for (const s of data.sources || []) {
-    if (!byTitle.has(s.title)) byTitle.set(s.title, [])
-    if (s.section) byTitle.get(s.title).push(s.section)
-  }
-  const sources = byTitle.size
-    ? `<details class="sources"><summary>📄 Fuentes (${byTitle.size})</summary><ul>${[...byTitle]
-        .map(([t, secs]) => `<li>${esc(t)}${secs.length ? `<span>${secs.map(esc).join(' · ')}</span>` : ''}</li>`)
-        .join('')}</ul></details>`
+  const groups = groupSources(data.sources)
+  const sources = groups.length
+    ? `<details class="sources"><summary>📄 Fuentes (${groups.length})</summary>${sourcesList(groups)}</details>`
     : ''
   const cta = data.cta_url
     ? `<a class="cta" href="${esc(data.cta_url)}" target="_blank" rel="noopener noreferrer" title="${esc(data.cta_url)}">Hablar con el equipo comercial ↗</a>`
@@ -138,7 +141,7 @@ function addBot(data, ms) {
       `${AVATAR}<div class="bubble ${cls}">
         ${fb === 'safety' ? '<div class="warn">⚠ Aviso de seguridad</div>' : ''}
         <div class="meta">${badges}</div>
-        <div class="answer">${renderMarkdown(data.cta_url ? (data.answer || '').replace(data.cta_url, '').trim() : data.answer || '')}</div>
+        <div class="answer">${renderMarkdown(answerText(data.answer, data.cta_url))}</div>
         ${fb && fb !== 'safety' ? `<div class="fbnote">${esc(FALLBACKS[fb] || fb)}</div>` : ''}
         ${log.some((e) => e.event === 'security_event') ? '<div class="warn danger">🚨 security_event en audit_log: incidencia real</div>' : ''}
         ${sources}
@@ -193,7 +196,12 @@ async function send(text, showUser = true) {
       signal: ctrl.signal,
     })
     stop()
-    if (res.ok) addBot(await res.json(), Date.now() - t0)
+    if (res.ok) {
+      const data = await res.json()
+      if (data.answer) addBot(data, Date.now() - t0)
+      if (data.handoff?.requested_now && data.handoff.notice) addNotice(data.handoff.notice)
+      setHandoff(data.handoff?.status)
+    }
     else if (res.status === 422) {
       const body = await res.json().catch(() => ({}))
       addError(`Petición inválida (422):\n${formatDetail(body.detail)}`)
@@ -219,6 +227,8 @@ function updateLabel() {
 }
 
 function resetChat(reason) {
+  setHandoff('bot')
+  lastUpdateId = 0
   sessionId = crypto.randomUUID()
   els.sessionId.textContent = sessionId.slice(0, 8)
   els.sessionId.title = sessionId

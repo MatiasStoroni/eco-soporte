@@ -18,7 +18,7 @@ def make_validate_session(services: Services):
             "flow": flow,
             "retrieval_filter": f.to_dict(),
             "messages": [HumanMessage(content=state["message"])],
-            "safety_flag": False, "intent": "business_question", "query": "", "queries": [], "docs": [], "relevant_docs": [],
+            "safety_flag": False, "handoff_requested": False, "intent": "business_question", "query": "", "queries": [], "docs": [], "relevant_docs": [],
             "attempts_ret": 0, "attempts_gen": 0, "answer": "", "cited_chunk_ids": [],
             "feedback": "", "grounding_ok": False, "answer_ok": False,
             "fallback_reason": None, "final_answer": "", "sources": [], "cta_url": None,

@@ -4,6 +4,7 @@ from eco_kb.graph import edges
 from eco_kb.graph.nodes.common import guarded
 from eco_kb.graph.nodes.finalize import make_finalize_sales, make_finalize_support, make_no_answer
 from eco_kb.graph.nodes.generation import make_check_answer, make_check_grounding, make_generate
+from eco_kb.graph.nodes.handoff import make_handoff_gate, make_handoff_response
 from eco_kb.graph.nodes.intent import make_classify_intent, make_converse
 from eco_kb.graph.nodes.retrieval_nodes import make_grade_documents, make_retrieve, make_rewrite_query
 from eco_kb.graph.nodes.safety import make_safety_gate, make_safety_response
@@ -55,6 +56,8 @@ def build_graph(services: Services, checkpointer=None):
     g.add_node("validate_session", make_validate_session(services))  # único que fija campos protegidos
     g.add_node("safety_gate", guarded("safety_gate", make_safety_gate(services)))
     g.add_node("safety_response", guarded("safety_response", make_safety_response(services)))
+    g.add_node("handoff_gate", guarded("handoff_gate", make_handoff_gate(services)))
+    g.add_node("handoff_response", guarded("handoff_response", make_handoff_response(services)))
     g.add_node("classify_intent", guarded("classify_intent", make_classify_intent(services)))
     g.add_node("converse", guarded("converse", make_converse(services)))
     g.add_node("router", lambda state: {})
@@ -64,13 +67,16 @@ def build_graph(services: Services, checkpointer=None):
     g.add_edge(START, "validate_session")
     g.add_edge("validate_session", "safety_gate")
     g.add_conditional_edges("safety_gate", edges.after_safety,
-                            {"unsafe": "safety_response", "safe": "classify_intent"})
+                            {"unsafe": "safety_response", "safe": "handoff_gate"})
+    g.add_conditional_edges("handoff_gate", edges.after_handoff,
+                            {"handoff": "handoff_response", "continue": "classify_intent"})
     g.add_conditional_edges("classify_intent", edges.after_intent,
                             {"business": "router", "chitchat": "converse"})
     g.add_edge("converse", END)
     g.add_conditional_edges("router", edges.route_by_registration,
                             {"support": "support_rag", "sales": "sales_rag"})
     g.add_edge("safety_response", END)
+    g.add_edge("handoff_response", END)
     g.add_edge("support_rag", END)
     g.add_edge("sales_rag", END)
     return g.compile(checkpointer=checkpointer)

@@ -127,6 +127,25 @@ La respuesta de `/chat` incluye `intent`; `fallback_reason` vale `off_topic` en 
 (preguntas coloquiales con la sección esperada y preguntas que deben negarse). Añade ahí cada pregunta que falle
 en producción y vuelve a ejecutarlo tras cualquier cambio de prompts, glosario o documentos.
 
+## Panel de administración y derivación a humano
+
+Cada turno de `/chat` se registra en `chat_conversations` / `chat_messages` (pool admin; la API crea las tablas al
+arrancar, también en bases ya existentes). Es una copia legible del historial con intent, fallback, fuentes,
+`audit_log` y latencia de cada respuesta; el grafo sigue usando su checkpointer. Si el registro falla, el chat sigue.
+
+- **Panel**: `/admin.html` (o `/admin`) en la vista. Requiere `ADMIN_TOKEN` en `.env` (vacío = panel desactivado);
+  cada persona entra con el token y su nombre. Permite filtrar conversaciones, ver la traza del pipeline de cada
+  respuesta, calificarla 👍/👎 con nota y copiarla como caso para `evals/questions.yaml`.
+- **Derivación (último recurso)**, configurable en `config/handoff.yaml`:
+  - Pedido explícito ("quiero hablar con una persona", "me pasás con un asesor"): `handoff_gate`, determinista y
+    después de seguridad, responde con texto fijo (sin LLM, `intent=handoff`).
+  - N respuestas seguidas sin información (`consecutive_fallbacks`, por defecto 3): la API la marca sola.
+  - Estados: `bot` → `pending` (el bot **sigue respondiendo**) → `human` (alguien la tomó en el panel: el bot no
+    responde y la vista recibe los mensajes del equipo por `GET /chat/{session_id}/updates`) → `bot` al devolverla.
+- Endpoints (`Authorization: Bearer <ADMIN_TOKEN>`): `GET /admin/stats`, `GET /admin/conversations`,
+  `GET /admin/conversations/{id}`, `POST /admin/conversations/{id}/status`, `POST /admin/conversations/{id}/messages`,
+  `PUT /admin/messages/{id}/review`.
+
 ## Aislamiento
 
 - Tabla `kb_chunks` particionada `LIST (audience)`; cada store consulta directamente su partición.

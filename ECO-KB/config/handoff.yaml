@@ -1,0 +1,33 @@
+# Derivación a una persona del equipo: ÚLTIMO RECURSO. El bot tiene libertad para responder.
+# - Una derivación queda "pendiente" en el panel de administración (/admin.html) y el bot SIGUE respondiendo.
+# - El bot solo deja de responder cuando alguien del equipo "toma" la conversación desde el panel,
+#   y vuelve a responder cuando se la devuelven.
+enabled: true
+
+# 1) Pedido explícito del usuario. Determinista (sin LLM) y después de la seguridad, como safety.yaml.
+#    Si coincide, el bot responde con `response` y la conversación pasa a pendiente.
+keywords:
+  - hablar con una persona
+  - hablar con un humano
+  - hablar con alguien
+  - persona real
+  - atención humana
+  - atencion humana
+  - agente humano
+patterns:
+  # "quiero hablar con un asesor", "me comunicás con alguien", "derivame a un operador"
+  - '\b(hablar|habl[aá]\w*|comunic\w+|contact\w+|deriv\w+)\b.*\b(persona|humano|alguien|asesor\w*|operador\w*|agente|representante|vendedor\w*|ejecutiv\w+)\b'
+  # "me pasás con un asesor?", "pasame con alguien" (no "pasar el carro donde hay personas")
+  - '\bp[aá]s[aá]\w*\s+con\s+(\w+\s+)?(persona|humano|alguien|asesor\w*|operador\w*|agente|representante|vendedor\w*|ejecutiv\w+)\b'
+  # "quiero que me atienda una persona" (no "el carro lo atiende una persona")
+  - '\bme\s+atiend\w*\b.*\b(persona|humano|alguien|asesor\w*|operador\w*)\b'
+response: >-
+  Le aviso a una persona de nuestro equipo para que revise tu conversación y te responda por acá.
+  Mientras tanto, puedo seguir ayudándote con lo que necesites.
+
+# 2) Último recurso automático: después de N respuestas SEGUIDAS sin información (fallback), la
+#    conversación pasa a pendiente. El texto del bot no cambia: la vista muestra un aviso aparte.
+#    0 = desactivado.
+consecutive_fallbacks: 3
+fallback_reasons: [no_documents, ungrounded, answer_mismatch]
+notice: "Le avisamos a una persona del equipo para que revise tu consulta. Podés seguir escribiendo."

@@ -15,6 +15,8 @@ const proxy = {
 }
 
 export default defineConfig({
+  // Dos páginas: el chat (index.html) y el panel de administración (admin.html).
+  build: { rollupOptions: { input: { main: 'index.html', admin: 'admin.html' } } },
   server: { port: 5173, proxy },
   preview: {
     host: true,          // escuchar en 0.0.0.0 dentro del contenedor

@@ -6,7 +6,7 @@ from eco_kb.graph.services import Services
 
 @pytest.fixture(scope="session")
 def app_config():
-    return load_config("config/clients.yaml", "config/safety.yaml")
+    return load_config("config/clients.yaml", "config/safety.yaml", "config/handoff.yaml")
 
 
 class FakeStructured:

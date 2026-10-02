@@ -1,4 +1,6 @@
-from pydantic import BaseModel
+from typing import Literal
+
+from pydantic import BaseModel, Field
 
 from eco_kb.graph.state import SessionPayload
 
@@ -11,11 +13,36 @@ class Source(BaseModel):
     section: str
 
 
+class Handoff(BaseModel):
+    status: Literal["bot", "pending", "human"]  # human = el bot no responde, atiende el equipo
+    requested_now: bool = False                   # este turno disparó la derivación
+    reason: str | None = None                     # user_request | repeated_fallback
+    notice: str | None = None                     # aviso para mostrar en la vista (no es parte de `answer`)
+
+
 class ChatResponse(BaseModel):
-    answer: str
+    answer: str  # vacío si la conversación la atiende una persona (handoff.status == "human")
     flow: str
-    intent: str  # business_question | greeting | smalltalk | capabilities | off_topic | unclear | safety
+    intent: str  # business_question | greeting | smalltalk | capabilities | off_topic | unclear | safety | handoff | human_agent
     sources: list[Source]
     fallback_reason: str | None
     cta_url: str | None
     audit_log: list[dict]
+    handoff: Handoff | None = None
+    message_id: int | None = None  # id del mensaje registrado (para el panel)
+
+
+class StatusChange(BaseModel):
+    status: Literal["bot", "human"]  # tomar la conversación o devolverla al bot (también descarta la derivación)
+    author: str | None = Field(default=None, max_length=80)
+
+
+class HumanMessage(BaseModel):
+    content: str = Field(min_length=1, max_length=4000)
+    author: str | None = Field(default=None, max_length=80)
+
+
+class Review(BaseModel):
+    rating: Literal["good", "bad"] | None
+    note: str | None = Field(default=None, max_length=2000)
+    author: str | None = Field(default=None, max_length=80)

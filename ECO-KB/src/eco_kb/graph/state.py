@@ -59,7 +59,8 @@ class GraphState(TypedDict, total=False):
     retrieval_filter: dict
     # turno
     safety_flag: bool
-    intent: str  # business_question | greeting | smalltalk | capabilities | off_topic | unclear
+    handoff_requested: bool  # el usuario pidió hablar con una persona (handoff_gate)
+    intent: str  # handoff | business_question | greeting | smalltalk | capabilities | off_topic | unclear
     query: str          # intención de la pregunta, corregida y completa
     queries: list[str]  # consultas de búsqueda generadas
     docs: list[RetrievedChunk]

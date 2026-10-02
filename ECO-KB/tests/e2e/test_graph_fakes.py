@@ -178,3 +178,16 @@ def test_safety_takes_priority_over_intent(make_services):
     llm = chat_llm("greeting")
     out = run(make_services(llm), message="hola, puedo mezclar esto con lejía?")
     assert out["fallback_reason"] == "safety" and llm.calls == []
+
+
+def test_handoff_request_is_deterministic_and_skips_llm(make_services):
+    llm = FakeLLM(script(SUP["chunk_id"], "x"))
+    out = run(make_services(llm, support_chunks=[SUP]), message="quiero hablar con una persona")
+    assert out["handoff_requested"] and out["intent"] == "handoff" and llm.calls == []
+    assert out["final_answer"] and out["sources"] == [] and out["cta_url"] is None
+
+
+def test_safety_goes_before_handoff(make_services):
+    llm = FakeLLM(script(SUP["chunk_id"], "x"))
+    out = run(make_services(llm, support_chunks=[SUP]), message="me salpicó en los ojos, pasame con una persona")
+    assert out["fallback_reason"] == "safety" and not out["handoff_requested"]

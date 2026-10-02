@@ -22,7 +22,7 @@ from eco_kb.settings import get_settings
 
 def build():
     s = get_settings()
-    cfg = load_config(s.clients_path, s.safety_path)
+    cfg = load_config(s.clients_path, s.safety_path, s.handoff_path)
     sup = make_pool(s.database_url_support_ro, "ev_sup")
     sal = make_pool(s.database_url_sales_ro, "ev_sal")
     services = Services(

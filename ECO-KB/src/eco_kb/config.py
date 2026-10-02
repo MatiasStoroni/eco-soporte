@@ -38,6 +38,25 @@ class SafetyConfig(BaseModel):
         return v
 
 
+class HandoffConfig(BaseModel):
+    """Derivación a humano (último recurso). Sin archivo: desactivada."""
+
+    enabled: bool = False
+    keywords: list[str] = Field(default_factory=list)
+    patterns: list[str] = Field(default_factory=list)
+    response: str = "Le aviso a una persona de nuestro equipo para que revise tu conversación."
+    consecutive_fallbacks: int = Field(default=0, ge=0)
+    fallback_reasons: list[str] = Field(default_factory=lambda: ["no_documents", "ungrounded", "answer_mismatch"])
+    notice: str = "Le avisamos a una persona del equipo para que revise tu consulta."
+
+    @field_validator("patterns")
+    @classmethod
+    def _compile(cls, v: list[str]) -> list[str]:
+        for p in v:
+            re.compile(p)
+        return v
+
+
 class Capabilities(BaseModel):
     support: str = Field(min_length=1)
     sales: str = Field(min_length=1)
@@ -53,6 +72,7 @@ class AppConfig(BaseModel):
     domain: DomainConfig
     clients: dict[str, ClientConfig]
     safety: SafetyConfig
+    handoff: HandoffConfig = Field(default_factory=HandoffConfig)
 
     @model_validator(mode="after")
     def _all_client_types(self) -> "AppConfig":
@@ -62,7 +82,9 @@ class AppConfig(BaseModel):
         return self
 
 
-def load_config(clients_path: str | Path, safety_path: str | Path) -> AppConfig:
+def load_config(clients_path: str | Path, safety_path: str | Path,
+                handoff_path: str | Path | None = None) -> AppConfig:
     raw = yaml.safe_load(Path(clients_path).read_text(encoding="utf-8"))
     safety = yaml.safe_load(Path(safety_path).read_text(encoding="utf-8"))
-    return AppConfig(domain=raw["domain"], clients=raw["clients"], safety=safety)
+    handoff = yaml.safe_load(Path(handoff_path).read_text(encoding="utf-8")) if handoff_path else {}
+    return AppConfig(domain=raw["domain"], clients=raw["clients"], safety=safety, handoff=handoff)

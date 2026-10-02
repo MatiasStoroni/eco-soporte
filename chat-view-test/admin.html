@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex" />
+    <title>ECO360 · Panel</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/src/admin.css" />
+  </head>
+  <body>
+    <!-- Acceso -->
+    <div id="login" class="login" hidden>
+      <form id="loginForm" class="login-card">
+        <div class="brand">
+          <div class="logo" aria-hidden="true">e</div>
+          <div>
+            <div class="brand-name">ECO360 <span>Panel</span></div>
+            <div class="brand-sub">Conversaciones y derivaciones</div>
+          </div>
+        </div>
+        <label>Token de acceso
+          <input id="token" type="password" autocomplete="current-password" required />
+        </label>
+        <label>Tu nombre <small>(firma tus respuestas y revisiones)</small>
+          <input id="author" maxlength="80" autocomplete="name" placeholder="Ej.: Ana" required />
+        </label>
+        <div id="loginError" class="login-error" role="alert"></div>
+        <button type="submit">Entrar</button>
+        <a class="back" href="/">← Volver al chat</a>
+      </form>
+    </div>
+
+    <div id="app" class="shell" hidden>
+      <header class="top">
+        <div class="brand">
+          <div class="logo" aria-hidden="true">e</div>
+          <div>
+            <div class="brand-name">ECO360 <span>Panel</span></div>
+            <div class="brand-sub">Conversaciones del asistente</div>
+          </div>
+        </div>
+        <div id="stats" class="stats"></div>
+        <div class="me">
+          <span id="me"></span>
+          <a href="/" class="ghost-link">Chat</a>
+          <button id="logout" class="ghost" type="button">Salir</button>
+        </div>
+      </header>
+
+      <div class="body">
+        <aside class="sidebar">
+          <div class="filters">
+            <input id="q" type="search" placeholder="Buscar en mensajes o sesión…" />
+            <div id="statusTabs" class="tabs" role="tablist">
+              <button type="button" data-status="" class="on">Todas</button>
+              <button type="button" data-status="pending">Pendientes <b id="pendingCount"></b></button>
+              <button type="button" data-status="human">Con persona</button>
+              <button type="button" data-status="bot">Bot</button>
+            </div>
+            <div class="row">
+              <select id="flow" aria-label="Flujo">
+                <option value="">Todos los flujos</option>
+                <option value="support">Soporte</option>
+                <option value="sales">Ventas</option>
+              </select>
+              <select id="clientType" aria-label="Tipo de cliente">
+                <option value="">Todos los tipos</option>
+                <option value="hotel">Hotel</option>
+                <option value="bodega">Bodega</option>
+                <option value="restaurante">Restaurante</option>
+                <option value="generic">Genérico</option>
+              </select>
+            </div>
+            <label class="check"><input id="issues" type="checkbox" /> Solo con problemas (sin respuesta, 👎 o derivadas)</label>
+          </div>
+          <div id="list" class="list" aria-live="polite"></div>
+        </aside>
+
+        <main id="detail" class="detail">
+          <div class="empty">
+            <div class="empty-icon" aria-hidden="true">💬</div>
+            <p>Elegí una conversación para ver cómo respondió el asistente.</p>
+            <p class="muted">Las derivadas a una persona aparecen primero.</p>
+          </div>
+        </main>
+      </div>
+    </div>
+    <script type="module" src="/src/admin.js"></script>
+  </body>
+</html>
