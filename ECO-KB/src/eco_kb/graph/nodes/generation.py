@@ -76,10 +76,12 @@ def make_check_grounding(services: Services):
         missing = check_numeric_claims(state["answer"], texts)
         if missing:
             return fail("numeric_mismatch", f"Estas cifras/códigos no aparecen en los fragmentos: {missing}. Elimínalos.")
-        # 3) LLM grader, solo después de las reglas
+        # 3) LLM grader, solo después de las reglas. Con título y sección: el origen del fragmento
+        #    (p. ej. "para hoteles premium") también respalda afirmaciones sobre de dónde sale la información.
+        labeled = [f"[{by_id[c]['title']} · {by_id[c]['section_path']}]\n{by_id[c]['content']}" for c in cited]
         out: GroundingOut = llm.invoke([
             ("system", prompts.GROUNDING),
-            ("human", "FRAGMENTOS:\n" + "\n\n".join(texts) + f"\n\nRESPUESTA:\n{state['answer']}"),
+            ("human", "FRAGMENTOS:\n" + "\n\n".join(labeled) + f"\n\nRESPUESTA:\n{state['answer']}"),
         ])
         if not out.grounded:
             return fail("llm_ungrounded", f"Afirmaciones sin respaldo: {out.unsupported_claims}. Elimínalas.")

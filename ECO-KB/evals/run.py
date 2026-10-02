@@ -61,6 +61,7 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--runs", type=int, default=1)
     ap.add_argument("--only", default="")
+    ap.add_argument("--flow", choices=["support", "sales"], help="solo ese flujo (incluye la charla en ese flujo)")
     ap.add_argument("--show", action="store_true", help="imprime las respuestas de conversación")
     args = ap.parse_args()
     data = yaml.safe_load(Path(__file__).with_name("questions.yaml").read_text(encoding="utf-8"))
@@ -71,13 +72,14 @@ def main() -> None:
         for c in cases:
             if args.only in c["q"]:
                 jobs += [("support", c), ("sales", c)] if flow == "chat" else [(flow, c)]
-    jobs *= args.runs
+    jobs = [j for j in jobs if not args.flow or j[0] == args.flow] * args.runs
 
     def run(job):
         flow, c = job
         out = graph.invoke(
-            {"session_id": uuid.uuid4().hex, "is_registered": flow == "support", "client_type": "hotel",
-             "language": "es", "message": c["q"]}, {"recursion_limit": 25})
+            {"session_id": uuid.uuid4().hex, "is_registered": flow == "support",
+             "client_type": c.get("client_type", "hotel"), "language": "es", "message": c["q"]},
+            {"recursion_limit": 25})
         return job, out
 
     with ThreadPoolExecutor(4) as ex:

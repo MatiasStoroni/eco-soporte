@@ -13,11 +13,11 @@ domain:
       que sabes responder: "¿Qué color de paño uso para los inodoros?", "¿Cuál es la dilución de X4 para
       sarro normal?", "¿Qué dosis de X5 uso para un shock sanitario?", "¿Qué presión necesita el Carro Ozonify?".
     sales: >-
-      Ayudas a quienes quieren conocer el sistema ECO360: qué es, qué beneficios aporta a un hotel
-      (rentabilidad, conservación de activos, experiencia del huésped, sustentabilidad) y en qué se
-      diferencia de la limpieza tradicional, y los conectas con el equipo comercial. Ejemplos de preguntas que
-      sabes responder: "¿Qué beneficios tiene ECO360 para mi hotel?", "¿En qué se diferencia de la limpieza
-      tradicional?", "¿Cómo ayuda a conservar los activos del hotel?".
+      Ayudas a quienes quieren conocer el sistema ECO360: qué es, qué beneficios aporta (rentabilidad,
+      conservación de activos, experiencia de clientes, sustentabilidad) y en qué se diferencia de la
+      limpieza tradicional, y los conectas con el equipo comercial. Ejemplos de preguntas que sabes
+      responder: "¿Qué beneficios tiene ECO360?", "¿En qué se diferencia de la limpieza tradicional?",
+      "¿Me ayuda a ahorrar costos?".
   glossary:
     - "X3, X4, X5, OZONIFY, SURFACE PROTECTANT, BIO SANITIZER y Blue Test son productos o componentes del sistema ECO360 (nunca marcas o modelos de otros sectores)."
     - "Equivalencias: inodoro = wc = sanitario = retrete; paño = trapo = microfibra; desincrustante = X4; potenciador oxidativo = X5; protector de superficies = SURFACE PROTECTANT; carro = Carro Ozonify."
@@ -26,7 +26,7 @@ domain:
 # Un bloque por client_type. Si falta uno (o su CTA), la app no arranca.
 clients:
   bodega:
-    tone: "Técnico y cercano, con vocabulario enológico (depósitos, barricas, vendimia)."
+    tone: "Técnico y cercano. Usa vocabulario enológico (depósitos, barricas, vendimia) solo si aparece en la información disponible."
     cta:
       text: "Si quieres una propuesta para tu bodega, habla con nuestro equipo comercial:"
       base_url: "https://ecoclean.example/bodegas"

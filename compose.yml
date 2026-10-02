@@ -1,6 +1,6 @@
 # Levanta la vista de chat + la API del chatbot + su Postgres propio (pgvector), "eco-db".
 #   docker compose up -d --build
-# Vista: http://<ip>:${WEB_PORT:-8090}   (el servidor de la vista reenvía /api/* a la API: sin CORS)
+# Vista: http://<ip>:${WEB_PORT:-8088}   (el servidor de la vista reenvía /api/* a la API: sin CORS)
 # La base, los usuarios y el esquema se crean solos la PRIMERA vez (volumen vacío); después hay que ingerir la KB.
 name: eco-demo
 
@@ -46,7 +46,7 @@ services:
       api:
         condition: service_healthy
     ports:
-      - "${WEB_PORT:-8090}:8080"
+      - "${WEB_PORT:-8088}:8080"
 
 volumes:
   eco_db_data:

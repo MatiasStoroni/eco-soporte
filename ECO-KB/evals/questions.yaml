@@ -43,6 +43,12 @@ sales:
   - {q: "q gano como gerente", expect: ["Beneficios de ECO360"]}
   - {q: "q color de paño uso para el inodoro", fallback: true}
   - {q: "cuanto x5 por litro", fallback: true}
+  # Clientes sin material comercial propio: deben recibir la información general de ECO360.
+  - {q: "para q sirve eco360?", client_type: restaurante, expect: ["Mensaje central", "Propuesta de valor"]}
+  - {q: "q beneficios me da en mi restaurante", client_type: restaurante, expect: ["Beneficios", "Propuesta de valor", "Impacto"]}
+  - {q: "en q se diferencia de limpiar como siempre", client_type: bodega, expect: ["Comparativa"]}
+  - {q: "me ahorra plata?", client_type: generic, expect: ["Impacto económico", "oportunidad", "Propuesta de valor"]}
+  - {q: "cuanto x5 por litro", client_type: restaurante, fallback: true}
 # Conversación: se ejecutan en AMBOS flujos. intent = clasificación esperada.
 chat:
   - {q: "hola", intent: greeting}
