@@ -33,6 +33,7 @@ support:
   - {q: "q hace el x3", expect: ["X3:"]}
   - {q: "como verifico q el protector sigue funcionando", expect: ["Procedimiento estándar", "Frecuencia"]}
   - {q: "cuanto cuesta el x4", fallback: true}
+  - {q: "puedo usar el x4 y lavandina juntos?", fallback: true}
   - {q: "como cambio el filtro del ozonify", fallback: true}
   - {q: "cual es la dilucion del x3", fallback: true}
 sales:
