@@ -85,6 +85,8 @@ function el(className, html) {
   return d
 }
 
+const AVATAR = '<div class="avatar" aria-hidden="true">e</div>'
+
 function addUser(text) {
   append(el('msg user', `<div class="bubble">${esc(text).replace(/\n/g, '<br>')}</div>`))
 }
@@ -96,7 +98,7 @@ function addSystem(text) {
 }
 
 function addTyping() {
-  const d = el('msg bot', '<div class="bubble typing"><span></span><span></span><span></span><em>escribiendo…</em></div>')
+  const d = el('msg bot', `${AVATAR}<div class="bubble typing"><span></span><span></span><span></span><em>escribiendo…</em></div>`)
   append(d)
   const t0 = Date.now()
   const timer = setInterval(() => {
@@ -123,15 +125,15 @@ function addBot(data, ms) {
         .join('')}</ul></div>`
     : ''
   const cta = data.cta_url
-    ? `<a class="cta" href="${esc(data.cta_url)}" target="_blank" rel="noopener noreferrer">${esc(data.cta_url)} ↗</a>`
+    ? `<a class="cta" href="${esc(data.cta_url)}" target="_blank" rel="noopener noreferrer" title="${esc(data.cta_url)}">Hablar con el equipo comercial ↗</a>`
     : ''
   append(
     el(
       'msg bot',
-      `<div class="bubble ${cls}">
+      `${AVATAR}<div class="bubble ${cls}">
         ${fb === 'safety' ? '<div class="warn">⚠ Aviso de seguridad</div>' : ''}
         <div class="meta">${badges}</div>
-        <div class="answer">${renderMarkdown(data.answer || '')}</div>
+        <div class="answer">${renderMarkdown(data.cta_url ? (data.answer || '').replace(data.cta_url, '').trim() : data.answer || '')}</div>
         ${fb && fb !== 'safety' ? `<div class="fbnote">${esc(FALLBACKS[fb] || fb)}</div>` : ''}
         ${log.some((e) => e.event === 'security_event') ? '<div class="warn danger">🚨 security_event en audit_log: incidencia real</div>' : ''}
         ${sources}
@@ -145,7 +147,7 @@ function addBot(data, ms) {
 }
 
 function addError(text, retryText) {
-  const d = el('msg bot', '<div class="bubble error"><b>Error</b><div></div></div>')
+  const d = el('msg bot', `${AVATAR}<div class="bubble error"><b>Error</b><div></div></div>`)
   d.querySelector('.bubble div').textContent = text
   if (retryText) {
     const b = document.createElement('button')

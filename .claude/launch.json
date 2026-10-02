@@ -1,0 +1,19 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "api",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "uv", "run", "--directory", "ECO-KB", "python", "-m", "uvicorn", "eco_kb.api.main:app", "--host", "127.0.0.1", "--port", "8000"],
+      "port": 8000,
+      "url": "http://127.0.0.1:8000"
+    },
+    {
+      "name": "web",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "chat-view-test", "run", "dev"],
+      "env": { "API_URL": "http://127.0.0.1:8000" },
+      "port": 5173
+    }
+  ]
+}

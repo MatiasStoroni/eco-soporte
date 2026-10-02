@@ -3,14 +3,23 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ECO-KB · Chat de prueba</title>
+    <title>ECO360 · Asistente</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
     <div class="app">
       <header class="topbar">
-        <div class="brand">ECO-KB <span>chat de prueba</span></div>
-        <div id="health" class="health" title="Estado de /health"><i></i><span>comprobando…</span></div>
+        <div class="brand">
+          <div class="logo" aria-hidden="true">e</div>
+          <div>
+            <div class="brand-name">ECO360 <span>Asistente</span></div>
+            <div class="brand-sub">Higiene profesional · demo</div>
+          </div>
+        </div>
+        <div id="health" class="health" title="Estado de la API"><i></i><span>comprobando…</span></div>
       </header>
 
       <section class="controls">
@@ -19,19 +28,19 @@
           <span class="track"></span>
           <span id="registeredLabel">Registrado · soporte</span>
         </label>
-        <label class="field">Tipo de cliente
+        <label class="field">Cliente
           <select id="clientType">
-            <option value="hotel">hotel</option>
-            <option value="bodega">bodega</option>
-            <option value="restaurante">restaurante</option>
-            <option value="generic">generic</option>
+            <option value="hotel">Hotel</option>
+            <option value="bodega">Bodega</option>
+            <option value="restaurante">Restaurante</option>
+            <option value="generic">Genérico</option>
           </select>
         </label>
         <label class="field">Idioma
           <input id="language" value="es" size="3" />
         </label>
         <div class="session">sesión <code id="sessionId"></code></div>
-        <button id="newChat" class="ghost">Nueva conversación</button>
+        <button id="newChat" class="ghost" type="button">Nueva conversación</button>
       </section>
 
       <main id="messages" class="messages"></main>
@@ -39,8 +48,10 @@
       <div id="examples" class="examples"></div>
 
       <form id="form" class="composer">
-        <textarea id="input" rows="1" placeholder="Escribe tu mensaje… (Enter envía, Shift+Enter salto de línea)"></textarea>
-        <button id="send" type="submit">Enviar</button>
+        <textarea id="input" rows="1" placeholder="Escribí tu consulta…"></textarea>
+        <button id="send" type="submit" aria-label="Enviar" title="Enviar (Enter) · Shift+Enter para salto de línea">
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
       </form>
     </div>
     <script type="module" src="/src/main.js"></script>
