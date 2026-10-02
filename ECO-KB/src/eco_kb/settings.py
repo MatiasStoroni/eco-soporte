@@ -34,8 +34,8 @@ class Settings(BaseSettings):
     google_oauth_token_path: str = "secrets/google_token.json"
     drive_sync_interval_minutes: int = 15
 
-    # Panel de administración (/admin/*). Vacío = panel desactivado.
-    admin_token: str = ""
+    # Contraseña del panel de administración (/admin/*). Fácil a propósito (demo); vacía = panel desactivado.
+    admin_token: str = "admin"
 
 
 @lru_cache

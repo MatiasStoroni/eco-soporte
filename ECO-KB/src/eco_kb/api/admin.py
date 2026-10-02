@@ -1,6 +1,6 @@
 """Panel de administración: revisar conversaciones, calificar respuestas y atender derivaciones.
 
-Protegido con un token compartido (ADMIN_TOKEN). Sin token configurado, el panel queda desactivado.
+Protegido con una contraseña compartida (ADMIN_TOKEN, "admin" por defecto). Vacía = panel desactivado.
 """
 import secrets
 from typing import Literal
@@ -18,7 +18,7 @@ def require_admin(authorization: str = Header(default="")) -> None:
         raise HTTPException(503, "Panel desactivado: definí ADMIN_TOKEN en ECO-KB/.env y reiniciá la API.")
     given = authorization.removeprefix("Bearer ").strip()
     if not secrets.compare_digest(given.encode(), token.encode()):
-        raise HTTPException(401, "Token inválido.")
+        raise HTTPException(401, "Contraseña incorrecta.")
 
 
 router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(require_admin)])

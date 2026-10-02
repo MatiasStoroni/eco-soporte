@@ -140,7 +140,7 @@ de hotelería); sales = 7 fragmentos `common` (documento "ECO360 para hoteles pr
 
 ## 9. Panel de administración y derivación a humano
 
-- Vista `chat-view-test/admin.html` (`/admin` en la vista): lista de conversaciones con filtros, traza legible del pipeline por respuesta, calificación 👍/👎 con nota, "Copiar caso de eval" (formato de `evals/questions.yaml`) y respuesta como persona del equipo. Acceso con `ADMIN_TOKEN` (en `ECO-KB/.env`; vacío = panel desactivado) más el nombre de quien revisa.
+- Vista `chat-view-test/admin.html` (`/admin` en la vista): lista de conversaciones con filtros, traza legible del pipeline por respuesta, calificación 👍/👎 con nota, "Copiar caso de eval" (formato de `evals/questions.yaml`) y respuesta como persona del equipo. Contraseña `admin` por defecto (se cambia con `ADMIN_TOKEN` en `ECO-KB/.env`; vacía = panel desactivado) más el nombre de quien revisa.
 - Registro: tablas `chat_conversations` y `chat_messages` (`src/eco_kb/conversations.py`), creadas por la API al arrancar. Usa el pool admin; los roles de solo lectura no las ven. Si el registro falla, el chat sigue.
 - Derivación como último recurso (`config/handoff.yaml`): pedido explícito, detectado en `handoff_gate` (determinista, después de seguridad, sin LLM), o N fallbacks seguidos (por defecto 3). Estados `bot → pending` (el bot sigue respondiendo) `→ human` (alguien la tomó: el bot no responde y la vista consulta `GET /chat/{id}/updates`) `→ bot`.
-- Limitaciones: los mensajes intercambiados con una persona no entran al historial del grafo; la vista del chat pierde la sesión si se recarga; el token es compartido (no hay usuarios reales).
+- Limitaciones: los mensajes intercambiados con una persona no entran al historial del grafo; la vista del chat pierde la sesión si se recarga; la contraseña es compartida y fácil a propósito (no hay usuarios reales).

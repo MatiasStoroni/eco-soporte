@@ -52,7 +52,7 @@ async function api(path, { method = 'GET', body } = {}) {
     headers: { Authorization: `Bearer ${token}`, ...(body ? { 'Content-Type': 'application/json' } : {}) },
     body: body ? JSON.stringify(body) : undefined,
   })
-  if (res.status === 401) throw new AuthError('Token inválido.')
+  if (res.status === 401) throw new AuthError('Contraseña incorrecta.')
   if (!res.ok) {
     const detail = (await res.json().catch(() => ({}))).detail
     throw new Error(typeof detail === 'string' ? detail : `HTTP ${res.status}`)
@@ -309,7 +309,7 @@ async function refresh() {
 }
 
 function handleError(e) {
-  if (e instanceof AuthError) return logout('La sesión expiró o el token cambió.')
+  if (e instanceof AuthError) return logout('La sesión expiró o cambió la contraseña.')
   toast(e.message || String(e), 'bad')
 }
 

@@ -13,7 +13,7 @@ docker compose up -d --build
 - Vista: `http://<ip>:8088` (su servidor reenvía `/api/*` a la API, mismo origen, sin CORS; acepta cualquier `Host`,
   así que puedes ponerle delante tu propio proxy).
 - Panel de administración (conversaciones, revisión de respuestas y derivaciones a una persona):
-  `http://<ip>:8088/admin`. Requiere `ADMIN_TOKEN` en `ECO-KB/.env` (ver `ECO-KB/README.md`).
+  `http://<ip>:8088/admin`. Contraseña: `admin` (se cambia con `ADMIN_TOKEN` en `ECO-KB/.env`).
 - API (solo depuración, localhost): `http://localhost:8000/docs`.
 - Levanta su propio Postgres con pgvector, el contenedor `eco-db` (sin puerto publicado; volumen `eco_db_data`).
   La primera vez crea la base `ecokb`, el admin `eco` y los roles de solo lectura (`ECO-KB/sql/init-db.sh`).

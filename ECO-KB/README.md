@@ -133,8 +133,8 @@ Cada turno de `/chat` se registra en `chat_conversations` / `chat_messages` (poo
 arrancar, también en bases ya existentes). Es una copia legible del historial con intent, fallback, fuentes,
 `audit_log` y latencia de cada respuesta; el grafo sigue usando su checkpointer. Si el registro falla, el chat sigue.
 
-- **Panel**: `/admin.html` (o `/admin`) en la vista. Requiere `ADMIN_TOKEN` en `.env` (vacío = panel desactivado);
-  cada persona entra con el token y su nombre. Permite filtrar conversaciones, ver la traza del pipeline de cada
+- **Panel**: `/admin.html` (o `/admin`) en la vista. La contraseña es `admin` (cambiable con `ADMIN_TOKEN` en `.env`;
+  vacía = panel desactivado); cada persona entra con la contraseña y su nombre. Permite filtrar conversaciones, ver la traza del pipeline de cada
   respuesta, calificarla 👍/👎 con nota y copiarla como caso para `evals/questions.yaml`.
 - **Derivación (último recurso)**, configurable en `config/handoff.yaml`:
   - Pedido explícito ("quiero hablar con una persona", "me pasás con un asesor"): `handoff_gate`, determinista y
