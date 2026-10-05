@@ -34,6 +34,11 @@ let busy = false
 let handoffStatus = 'bot'
 let lastUpdateId = 0
 let pollTimer = null
+let polling = false
+let sessionStarted = false // la conversación ya existe en el servidor (hubo al menos un turno)
+// Se consulta SIEMPRE que la conversación exista: el equipo puede intervenir en cualquier momento, también en una
+// conversación que no estaba derivada. Más seguido cuanto más probable es que llegue un mensaje del equipo.
+const POLL_MS = { bot: 8000, pending: 5000, human: 3000 }
 const HANDOFF_LABELS = { pending: 'Derivada al equipo', human: 'Te atiende una persona del equipo' }
 
 function append(node) {
@@ -83,12 +88,24 @@ function setHandoff(status) {
   els.handoff.hidden = status === 'bot'
   els.handoff.className = `handoff ${status}`
   els.handoff.querySelector('span').textContent = HANDOFF_LABELS[status] || ''
-  clearInterval(pollTimer)
-  pollTimer = status === 'bot' ? null : setInterval(pollUpdates, status === 'human' ? 3000 : 5000)
+  schedulePolling()
   if (status !== 'bot') pollUpdates()
 }
 
+function schedulePolling() {
+  clearInterval(pollTimer)
+  // Con la pestaña oculta no se consulta (batería); al volver, catchUp() se pone al día enseguida.
+  pollTimer = sessionStarted ? setInterval(() => document.hidden || pollUpdates(), POLL_MS[handoffStatus]) : null
+}
+
+// El celular congela los temporizadores con la pantalla apagada o la pestaña en segundo plano.
+function catchUp() {
+  if (sessionStarted && !document.hidden) pollUpdates()
+}
+
 async function pollUpdates() {
+  if (polling || !sessionStarted) return
+  polling = true
   const sid = sessionId
   try {
     const r = await fetch(`${API}/chat/${encodeURIComponent(sid)}/updates?after=${lastUpdateId}`)
@@ -103,6 +120,8 @@ async function pollUpdates() {
     setHandoff(data.status)
   } catch {
     /* sin conexión: se reintenta en el próximo ciclo */
+  } finally {
+    polling = false
   }
 }
 
@@ -201,6 +220,10 @@ async function send(text, showUser = true) {
       if (data.answer) addBot(data, Date.now() - t0)
       if (data.handoff?.requested_now && data.handoff.notice) addNotice(data.handoff.notice)
       setHandoff(data.handoff?.status)
+      if (!sessionStarted) {
+        sessionStarted = true
+        schedulePolling()
+      }
     }
     else if (res.status === 422) {
       const body = await res.json().catch(() => ({}))
@@ -227,7 +250,9 @@ function updateLabel() {
 }
 
 function resetChat(reason) {
+  sessionStarted = false
   setHandoff('bot')
+  schedulePolling()
   lastUpdateId = 0
   sessionId = crypto.randomUUID()
   els.sessionId.textContent = sessionId.slice(0, 8)
@@ -254,6 +279,9 @@ els.registered.addEventListener('change', () => {
 })
 els.clientType.addEventListener('change', () => resetChat('Cambió el tipo de cliente'))
 els.newChat.addEventListener('click', () => resetChat())
+document.addEventListener('visibilitychange', catchUp)
+window.addEventListener('focus', catchUp)
+window.addEventListener('online', catchUp)
 els.form.addEventListener('submit', (e) => {
   e.preventDefault()
   const t = els.input.value
