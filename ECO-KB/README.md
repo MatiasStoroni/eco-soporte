@@ -129,22 +129,139 @@ en producción y vuelve a ejecutarlo tras cualquier cambio de prompts, glosario 
 
 ## Panel de administración y derivación a humano
 
-Cada turno de `/chat` se registra en `chat_conversations` / `chat_messages` (pool admin; la API crea las tablas al
-arrancar, también en bases ya existentes). Es una copia legible del historial con intent, fallback, fuentes,
-`audit_log` y latencia de cada respuesta; el grafo sigue usando su checkpointer. Si el registro falla, el chat sigue.
+Permite que la empresa revise cómo responde el bot y que una persona del equipo intervenga cuando hace falta.
+La derivación es **último recurso**: el bot tiene libertad para responder y solo se calla cuando alguien toma
+la conversación a mano.
 
-- **Panel**: `/admin.html` (o `/admin`) en la vista. La contraseña es `admin` (cambiable con `ADMIN_TOKEN` en `.env`;
-  vacía = panel desactivado); cada persona entra con la contraseña y su nombre. Permite filtrar conversaciones, ver la traza del pipeline de cada
-  respuesta, calificarla 👍/👎 con nota y copiarla como caso para `evals/questions.yaml`.
-- **Derivación (último recurso)**, configurable en `config/handoff.yaml`:
-  - Pedido explícito ("quiero hablar con una persona", "me pasás con un asesor"): `handoff_gate`, determinista y
-    después de seguridad, responde con texto fijo (sin LLM, `intent=handoff`).
-  - N respuestas seguidas sin información (`consecutive_fallbacks`, por defecto 3): la API la marca sola.
-  - Estados: `bot` → `pending` (el bot **sigue respondiendo**) → `human` (alguien la tomó en el panel: el bot no
-    responde y la vista recibe los mensajes del equipo por `GET /chat/{session_id}/updates`) → `bot` al devolverla.
-- Endpoints (`Authorization: Bearer <ADMIN_TOKEN>`): `GET /admin/stats`, `GET /admin/conversations`,
-  `GET /admin/conversations/{id}`, `POST /admin/conversations/{id}/status`, `POST /admin/conversations/{id}/messages`,
-  `PUT /admin/messages/{id}/review`.
+### Uso
+
+- Entrar a `http://<ip>:8088/admin` (en local, `http://localhost:5173/admin`) con la contraseña `admin` y tu
+  nombre. El nombre firma las respuestas y las revisiones.
+  - La contraseña se cambia con `ADMIN_TOKEN=...` en `ECO-KB/.env`. Si se deja vacía, el panel queda desactivado.
+- Arriba están las métricas: conversaciones, derivaciones pendientes, % de respuestas sin información, 👍/👎 y
+  latencia promedio.
+- La lista se filtra por estado, flujo, tipo de cliente y texto, o "solo con problemas". Las derivadas aparecen
+  primero.
+- En el detalle de cada respuesta del bot se ven intención, fallback, latencia, cómo interpretó la pregunta,
+  fuentes, CTA y una **traza legible del pipeline** (resumen del `audit_log`; el JSON completo está desplegable).
+- **Revisar**: 👍/👎 con nota. **Copiar caso de eval** genera la línea para `evals/questions.yaml` (con las
+  secciones citadas como `expect`, o `fallback: true` si el bot no respondió).
+- **Intervenir**:
+  - *Tomar conversación* hace que el bot deje de responder.
+  - Responder desde la caja de abajo: si la conversación no estaba tomada, la toma sola.
+  - *Devolver al bot* o *Descartar* (en una derivación pendiente) la devuelve al bot.
+  - El cliente ve los mensajes del equipo en el chat sin recargar.
+
+### Cómo está implementado
+
+**Registro de conversaciones** ([`src/eco_kb/conversations.py`](src/eco_kb/conversations.py)). Cada turno de
+`/chat` se guarda en dos tablas:
+
+- `chat_conversations`: una fila por `session_id`, con flujo, tipo de cliente, estado de la derivación, motivo y
+  quién la atiende.
+- `chat_messages`: un mensaje por fila (`role`: `user | bot | human | system`). Las respuestas del bot guardan
+  `intent`, `fallback_reason`, `sources`, `cta_url`, `latency_ms`, `audit_log` y la revisión del equipo
+  (`rating`, `review_note`, `reviewed_by`).
+
+Las tablas usan el pool **admin**: los roles de solo lectura del RAG no las ven, así que el aislamiento de la KB
+no cambia. La API las crea al arrancar (`CREATE TABLE IF NOT EXISTS`), también en bases que ya existían, sin
+migraciones manuales. Es una copia legible para el panel: el grafo sigue usando su checkpointer de LangGraph
+como memoria. Si el registro falla, se loguea y el chat sigue respondiendo.
+
+**Derivación**. Hay tres disparadores:
+
+| Motivo | Cómo se detecta | Respuesta al cliente |
+|---|---|---|
+| `user_request` ("quiero hablar con una persona", "me pasás con un asesor") | `handoff_gate` en el grafo: determinista, sin LLM, después de `safety_gate`. Palabras y regex en [`config/handoff.yaml`](config/handoff.yaml) | Texto fijo (`response` de `handoff.yaml`), `intent=handoff` |
+| `purchase` (quiere comprar, reponer o cotizar) | `classify_intent` devuelve `purchase` y `purchase_response` marca `handoff_requested` | Texto fijo (`messages.purchase` de `clients.yaml`) + CTA |
+| `repeated_fallback` (N respuestas **seguidas** sin información) | En la API (`_handoff` en `api/main.py`), contando en `chat_messages` | La respuesta normal del bot; la vista muestra aparte el `notice` de `handoff.yaml` |
+
+N es `consecutive_fallbacks` en `handoff.yaml` (3 por defecto; 0 = desactivado). Para que el patrón de pedido
+explícito no robe preguntas reales, `tests/unit/test_handoff_gate.py` comprueba que ninguna pregunta de
+`evals/questions.yaml` lo dispara. Si se agregan palabras o patrones, correr `pytest`.
+
+**Estados**: `bot` → `pending` → `human` → `bot`.
+
+| Estado | Qué pasa |
+|---|---|
+| `bot` | Normal. |
+| `pending` | Derivada: aparece primero en el panel y **el bot sigue respondiendo**. Solo se pasa a `pending` desde `bot`, así que una derivación no se repite. |
+| `human` | Alguien la tomó: `/chat` guarda el mensaje del cliente **sin invocar el grafo** y devuelve `answer=""`, `intent=human_agent`. |
+
+Al tomarla o devolverla se inserta un mensaje `system` ("Ana se sumó a la conversación", "La conversación vuelve
+al asistente virtual") que ven el cliente y el panel. Descartar una derivación pendiente no se anuncia al
+cliente.
+
+**Actualización (polling)**. No hay WebSockets ni SSE: cada lado pregunta cada pocos segundos. Así funciona sin
+tocar el proxy de Vite ni el contenedor, y se recupera solo si la API se reinicia.
+
+- **Chat** (`chat-view-test/src/main.js`):
+  - Desde el primer mensaje del cliente consulta `GET /chat/{session_id}/updates?after=<último id>` cada 8 s
+    (`bot`), 5 s (`pending`) o 3 s (`human`).
+  - Consulta **siempre**, no solo con la conversación derivada, porque el equipo puede intervenir en cualquier
+    conversación.
+  - Con la pestaña oculta no consulta (batería). Al volver a estar visible, recuperar la red o recibir el foco,
+    consulta en el momento: el celular congela los temporizadores con la pantalla apagada.
+  - Los ids de `chat_messages` son crecientes, así que `after` evita duplicados. Una consulta no arranca si la
+    anterior sigue en curso.
+- **Panel** (`chat-view-test/src/admin.js`):
+  - Cada 5 s (solo con la pestaña visible) refresca métricas, lista y la conversación abierta.
+  - Solo redibuja si cambió algo (compara una firma de ids, estado y revisiones). No pisa una nota que se está
+    escribiendo y conserva el borrador de respuesta y el scroll.
+- Si hiciera falta tiempo real, el paso natural es SSE alimentado por `LISTEN/NOTIFY` de Postgres, sin cambiar
+  el formato `after=<id>`.
+
+**Seguridad**:
+
+- Los endpoints `/admin/*` piden `Authorization: Bearer <ADMIN_TOKEN>` y comparan con `secrets.compare_digest`.
+  Es una contraseña compartida para la demo, no hay usuarios.
+- El panel la guarda en `sessionStorage` (se borra al cerrar la pestaña) y el nombre en `localStorage`.
+- `GET /chat/{session_id}/updates` no pide contraseña: el `session_id` (UUID aleatorio) hace de credencial y
+  solo devuelve mensajes `human` y `system`, nunca el `audit_log`.
+
+**Archivos**:
+
+| Archivo | Qué tiene |
+|---|---|
+| `src/eco_kb/conversations.py` | Esquema y `ConversationStore` |
+| `src/eco_kb/api/main.py` | Registro en `/chat`, `_handoff` y `/chat/{id}/updates` |
+| `src/eco_kb/api/admin.py` | Endpoints del panel |
+| `src/eco_kb/graph/nodes/handoff.py` | `handoff_gate` y `handoff_response` |
+| `src/eco_kb/graph/nodes/redirects.py` | `purchase_response` |
+| `config/handoff.yaml` | Configuración de la derivación |
+| `chat-view-test/admin.html`, `src/admin.{js,css}` | Panel |
+| `chat-view-test/src/shared.js` | Markdown, fuentes y fallbacks compartidos con el chat |
+| `chat-view-test/src/tokens.css` | Colores compartidos con el chat |
+
+**Endpoints** (todos los `/admin/*` con el Bearer):
+
+| Método y ruta | Para qué |
+|---|---|
+| `GET /admin/ping` | Validar la contraseña (login) |
+| `GET /admin/stats` | Métricas |
+| `GET /admin/conversations?status=&flow=&client_type=&q=&issues=&limit=&offset=` | Lista |
+| `GET /admin/conversations/{id}` | Conversación con todos sus mensajes |
+| `POST /admin/conversations/{id}/status` `{status: "human" \| "bot", author}` | Tomar / devolver o descartar |
+| `POST /admin/conversations/{id}/messages` `{content, author}` | Responder (toma la conversación si hace falta) |
+| `PUT /admin/messages/{id}/review` `{rating: "good" \| "bad" \| null, note, author}` | Revisar una respuesta |
+| `GET /chat/{id}/updates?after=<id>` (sin contraseña) | Polling del chat |
+
+**Tests**: `tests/unit/test_handoff_gate.py` (patrones), `tests/e2e/test_graph_fakes.py` (derivación sin LLM y
+seguridad primero), `tests/e2e/test_api_fakes.py` (contraseña) y
+`tests/integration/test_conversations_pg.py` (ciclo completo contra Postgres:
+`python -m uv run python -m pytest -m integration tests/integration/test_conversations_pg.py`).
+
+**Limitaciones conocidas**:
+
+- Lo que se habla con una persona no entra al historial del grafo: al devolver la conversación, el bot no lo
+  recuerda.
+- Si el cliente recarga el chat, empieza una sesión nueva (el `session_id` vive en memoria de la página).
+- La contraseña es compartida y fácil a propósito; cambiarla antes de mostrar el panel fuera del equipo.
+
+### Resetear conversaciones o la base
+
+Ver [Resetear datos](../README.md#resetear-datos) en el README principal. En resumen: para limpiar conversaciones
+usar `TRUNCATE`, que conserva la KB; `docker compose down -v` borra **todo**, incluida la KB ingerida.
 
 ## Aislamiento
 
