@@ -19,3 +19,15 @@ def test_invented_code_and_ratio_fail():
 def test_spacing_normalized():
     assert check_numeric_claims("2 %", CTX) == []
     assert check_numeric_claims("20 ml", CTX) == []
+
+
+def test_equivalent_units_normalized():
+    ctx = ["Incrustación severa: tiempo de contacto 5-10 min. Activa 5 h en recipiente cerrado. Bidón de 5 litros."]
+    assert check_numeric_claims("Deje actuar de 5 a 10 minutos.", ctx) == []
+    assert check_numeric_claims("Dura 5 horas cerrada.", ctx) == []
+    assert check_numeric_claims("Viene en bidón de 5 l.", ctx) == []
+
+
+def test_equivalent_units_still_catch_invented_values():
+    ctx = ["Tiempo de contacto: 5-10 min."]
+    assert "15min" in check_numeric_claims("Deje actuar 15 minutos.", ctx)

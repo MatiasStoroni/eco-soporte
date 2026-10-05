@@ -19,10 +19,25 @@ class Fallback(BaseModel):
     sales: str = Field(min_length=1)
 
 
+class ClientCapabilities(BaseModel):
+    """Override por client_type de domain.capabilities: solo ejemplos que ESE cliente puede consultar."""
+
+    support: str | None = None
+    sales: str | None = None
+
+
 class ClientConfig(BaseModel):
     tone: str = Field(min_length=1)
     cta: CTA
     fallback: Fallback
+    capabilities: ClientCapabilities = Field(default_factory=ClientCapabilities)
+
+
+class Messages(BaseModel):
+    """Respuestas fijas (sin RAG). En ventas el código añade siempre el CTA después."""
+
+    sales_technical: str = Field(min_length=1)
+    purchase: str = Field(min_length=1)
 
 
 class SafetyConfig(BaseModel):
@@ -73,6 +88,7 @@ class AppConfig(BaseModel):
     clients: dict[str, ClientConfig]
     safety: SafetyConfig
     handoff: HandoffConfig = Field(default_factory=HandoffConfig)
+    messages: Messages
 
     @model_validator(mode="after")
     def _all_client_types(self) -> "AppConfig":
@@ -81,10 +97,16 @@ class AppConfig(BaseModel):
             raise ValueError(f"clients.yaml no define client_types: {sorted(missing)}")
         return self
 
+    def capabilities(self, flow: str, client_type: str) -> str:
+        """Qué sabe hacer el asistente para ESE cliente y flujo (override del cliente o el general)."""
+        own = getattr(self.clients[client_type].capabilities, flow)
+        return own or getattr(self.domain.capabilities, flow)
+
 
 def load_config(clients_path: str | Path, safety_path: str | Path,
                 handoff_path: str | Path | None = None) -> AppConfig:
     raw = yaml.safe_load(Path(clients_path).read_text(encoding="utf-8"))
     safety = yaml.safe_load(Path(safety_path).read_text(encoding="utf-8"))
     handoff = yaml.safe_load(Path(handoff_path).read_text(encoding="utf-8")) if handoff_path else {}
-    return AppConfig(domain=raw["domain"], clients=raw["clients"], safety=safety, handoff=handoff)
+    return AppConfig(domain=raw["domain"], clients=raw["clients"], safety=safety, handoff=handoff,
+                     messages=raw["messages"])

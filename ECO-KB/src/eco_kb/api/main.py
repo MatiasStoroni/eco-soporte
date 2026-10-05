@@ -31,8 +31,8 @@ async def lifespan(app: FastAPI):
     conversations = ConversationStore(admin)
     conversations.setup()
     services = Services(
-        generator_llm=make_chat_model(s.llm_generator_model),
-        grader_llm=make_chat_model(s.llm_grader_model),
+        generator_llm=make_chat_model(s.llm_generator_model, s.llm_generator_thinking),
+        grader_llm=make_chat_model(s.llm_grader_model, s.llm_grader_thinking),
         support_store=PgChunkStore("support", support, s.top_k, s.candidate_k),
         sales_store=PgChunkStore("sales", sales, s.top_k, s.candidate_k),
         embedder=GeminiEmbedder(s.google_api_key, s.embedding_model, s.embedding_dim),
@@ -103,11 +103,11 @@ def chat(req: ChatRequest):
 
 
 def _handoff(store: ConversationStore, session_id: str, status: str, state: dict, resp: ChatResponse) -> Handoff:
-    """Derivación como último recurso: pedido explícito o N respuestas seguidas sin información."""
+    """Derivación: pedido explícito, pedido de compra o (último recurso) N respuestas seguidas sin información."""
     cfg = app.state.handoff
     reason = None
     if state.get("handoff_requested"):
-        reason = "user_request"
+        reason = "purchase" if state.get("intent") == "purchase" else "user_request"
     elif (cfg.enabled and cfg.consecutive_fallbacks and resp.fallback_reason in cfg.fallback_reasons
           and _safe(store.trailing_fallbacks, session_id, cfg.fallback_reasons, default=0) >= cfg.consecutive_fallbacks):
         reason = "repeated_fallback"

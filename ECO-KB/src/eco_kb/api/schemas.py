@@ -16,14 +16,14 @@ class Source(BaseModel):
 class Handoff(BaseModel):
     status: Literal["bot", "pending", "human"]  # human = el bot no responde, atiende el equipo
     requested_now: bool = False                   # este turno disparó la derivación
-    reason: str | None = None                     # user_request | repeated_fallback
+    reason: str | None = None                     # user_request | purchase | repeated_fallback
     notice: str | None = None                     # aviso para mostrar en la vista (no es parte de `answer`)
 
 
 class ChatResponse(BaseModel):
     answer: str  # vacío si la conversación la atiende una persona (handoff.status == "human")
     flow: str
-    intent: str  # business_question | greeting | smalltalk | capabilities | off_topic | unclear | safety | handoff | human_agent
+    intent: str  # business_question | technical_question | purchase | greeting | smalltalk | capabilities | off_topic | unclear | safety | handoff | human_agent
     sources: list[Source]
     fallback_reason: str | None
     cta_url: str | None

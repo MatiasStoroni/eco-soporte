@@ -88,15 +88,31 @@ embeddings `gemini-embedding-001` a 768 dimensiones.
 - `curl` rompe JSON con tildes: probar la API con Python (`urllib`).
 - No nombrar scripts como módulos de la stdlib (`inspect.py` rompió los imports).
 
-## 6. Estado actual (todo commiteado; último commit `d921a87 fix: emergency numbers`)
+## 6. Estado actual (último commit `0e7b633 add admin` + cambios del 2026-10-05 sin commitear)
 
-**KB ingerida:** support = 20 fragmentos `common` (fichas técnicas de X4, X5 y Carro Ozonify) + 28 `hotel` (manual operativo
-de hotelería); sales = 7 fragmentos `common` (documento "ECO360 para hoteles premium - Análisis ejecutivo", movido a
-`ventas/comun/` para que todos los tipos de cliente reciban información general).
+**KB ingerida (2026-10-05):** support = 16 fragmentos `common` (fichas de X4 y X5) + 4 `bodega` (ficha del Carro Ozonify
+Industrial) + 30 `hotel` (manual operativo + OZONIFY PRO) + 2 `restaurante` (OZONIFY PRO); sales = 7 fragmentos `common`
+(documento "ECO360 para hoteles premium - Análisis ejecutivo", en `ventas/comun/` para que todos reciban información general).
 
-**Resultados de evals (3 corridas):** ventas 105/105; soporte 168/168.
+**Resultados de evals (3 corridas, 2026-10-05):** 342/342 (114 casos × 3; antes de los cambios, con los casos nuevos: 287/342). `pytest`: 103 tests.
 
-**Cambios hechos en esta etapa:**
+**Cambios del 2026-10-05 (debug de casos reportados):**
+- Dos equipos de ozono: Carro Ozonify Industrial → solo bodega (`soporte/bodega/`); OZONIFY PRO → hotel y restaurante
+  (solo "qué es"; falta su ficha técnica). El reescritor recibe el `client_type` para resolver "ozonify" a secas.
+- X3 no se aplica sobre muebles de madera ni tapizados (confirmado por el equipo): agregado al manual (X3, normas y áreas).
+- Intenciones nuevas: `purchase` (comprar/reponer/cotizar → respuesta fija + derivación "purchase" en el panel + CTA, ambos
+  flujos) y `technical_question` (en ventas → respuesta fija "lo técnico es para clientes" + CTA, `fallback_reason=technical`;
+  en soporte → RAG). Pedidos de ayuda sin tema ("necesito soporte") → `capabilities` (≈2 s, sin RAG).
+- `capabilities` por tipo de cliente en `clients.yaml` (bodega no ofrece ejemplos del manual de hotel) y fallback de soporte
+  de bodega que dice qué sí puede responder. Textos fijos en `clients.yaml` → `messages`.
+- Robustez: un fallo del LLM dentro del RAG (p. ej. salida estructurada vacía de Gemini) ya no tumba el turno (antes: 500 en
+  la API, "no responde nada"); cuenta como intento fallido y se reintenta o cae al fallback. El panel lo muestra.
+- Latencia: `LLM_GENERATOR_THINKING=low` (default en `settings.py`). Medido: media 12,1 s → 8,6 s y máximo 28,9 s → 16,5 s.
+- Grounding: el regex de cifras equipara unidades equivalentes ("5 a 10 minutos" = "5-10 min"); antes rechazaba
+  siempre el primer borrador de las dosis de X4 (+3-4 s). `check_grounding` registra `missing` en el audit_log.
+- `evals/run.py`: nuevos campos `contains`, `absent` y `fallback: maybe`; acepta el CTA en respuestas fijas.
+
+**Cambios de la etapa anterior:**
 - Ventas para tipos de cliente sin material propio: el documento comercial pasó a común. El generador presenta el material
   de otro sector como beneficio general de ECO360 ("documentado en hotelería") sin trasladarlo al rubro del cliente.
   El tono de bodega ya no fuerza vocabulario enológico, que provocaba frases inventadas. El verificador recibe el título y la
@@ -113,6 +129,8 @@ de hotelería); sales = 7 fragmentos `common` (documento "ECO360 para hoteles pr
 
 ## 7. Pendientes y cosas a saber
 
+- **Contenido (2026-10-05):** falta la ficha técnica de OZONIFY PRO y cualquier procedimiento propio de bodega (depósitos,
+  tanques, barricas); el genérico no ve ningún equipo de ozono. Detalle en `LEEME - Pendientes y dudas.md`.
 - **Contenido:** no hay material comercial propio de restaurante, bodega ni genérico (solo el de hoteles, ahora común), ni
   documento de ventas por producto (X4, X5, Ozonify). Tampoco hay dosificación de X3 (ver `LEEME`). **No inventar contenido**:
   si falta, reportarlo; lo completan los operadores. El contenido nuevo va en `docs/estructurados/ventas/<tipo>/` o `comun/`

@@ -29,6 +29,9 @@ validate_session → safety_gate ─┬─ unsafe → safety_response (texto enl
                                 └─ safe → handoff_gate ─┬─ pide una persona → handoff_response (texto fijo, sin LLM) [intent=handoff]
                                                         └─ no → classify_intent ─┬─ business_question → router ─┬─ support_rag → finalize_support
                                                                                  │                              └─ sales_rag   → finalize_sales (+CTA)
+                                                                                 ├─ technical_question ─┬─ support → router (igual que business)
+                                                                                 │                      └─ sales → sales_technical_response (texto fijo + CTA) [fallback_reason=technical]
+                                                                                 ├─ purchase → purchase_response (texto fijo + CTA, deriva al equipo: pendiente "purchase") [ambos flujos]
                                                                                  └─ greeting|smalltalk|capabilities|off_topic|unclear → converse
  *_rag: rewrite_query → retrieve → grade_documents → generate → check_grounding → check_answer → finalize
         · grade sin docs relevantes: reintenta rewrite (hasta MAX_RET=2 recuperaciones) → si no, no_answer
@@ -40,8 +43,9 @@ Qué hace cada etapa (y su palanca):
 | Etapa | Qué hace | Dónde se toca |
 |---|---|---|
 | `safety_gate` | Regex/keywords deterministas (mezclas, ingestión, ojos/piel, ventilación). Si coincide → respuesta enlatada. | `config/safety.yaml` |
-| `classify_intent` | LLM clasifica el mensaje. Ante la duda → `business_question`. Si falla → `business_question`. | `prompts.INTENT`, `nodes/intent.py` |
-| `converse` | Responde charla/fuera de tema en 2–3 frases, SIEMPRE redirige al negocio, sin URLs ni fuentes. Si el LLM falla usa respuesta enlatada. | `prompts.CONVERSE`, `domain.capabilities` |
+| `classify_intent` | LLM clasifica el mensaje. Ante la duda → `business_question`. Si falla → `business_question`. Pedido de ayuda sin tema ("necesito soporte") → `capabilities` (no pasa por el RAG). | `prompts.INTENT`, `nodes/intent.py` |
+| `purchase_response` / `sales_technical_response` | Respuestas fijas sin LLM; el CTA lo añade el código. | `clients.yaml` → `messages`, `nodes/redirects.py` |
+| `converse` | Responde charla/fuera de tema en 2–3 frases, SIEMPRE redirige al negocio, sin URLs ni fuentes. Si el LLM falla usa respuesta enlatada. | `prompts.CONVERSE`, `domain.capabilities` o `clients.<tipo>.capabilities` |
 | `rewrite_query` | Corrige la pregunta (`intent`) y genera 2–4 consultas distintas usando el contexto del negocio, el glosario y el **catálogo real de títulos/secciones** de la KB. | `prompts.REWRITE`, `config/clients.yaml` → `domain` |
 | `retrieve` | Embebe cada consulta (+ el mensaje original), busca por vector (HNSW coseno, top 20) y FTS español (top 20) por consulta, fusiona con RRF → top 10. Filtro duro por `audience`, `client_types ∩ {client_type, common}`, `status`, `language`. | `retrieval/store.py`, `nodes/retrieval_nodes.py` |
 | `grade_documents` | Descarta `vec_score < MIN_VECTOR_SCORE (0.45)` y pide a un LLM marcar relevantes (tolerante: ante la duda, true). | `prompts.GRADE`, `MIN_VECTOR_SCORE` |
@@ -50,20 +54,23 @@ Qué hace cada etapa (y su palanca):
 | `check_answer` | LLM verifica que la respuesta contesta la pregunta INTERPRETADA, con contexto del negocio. | `prompts.ANSWER_CHECK` |
 | `finalize_*` | Support: fuentes o fallback. Sales: quita URLs del LLM, añade CTA con UTM, verifica invariante. | `nodes/finalize.py` |
 
-Parámetros (`.env`): `MIN_VECTOR_SCORE=0.45`, `TOP_K=8`, candidatos 20, `MAX_RET=2`, `MAX_GEN=3`.
+Parámetros (`.env`): `MIN_VECTOR_SCORE=0.45`, `TOP_K=8`, candidatos 20, `MAX_RET=2`, `MAX_GEN=3`,
+`LLM_GENERATOR_THINKING` / `LLM_GRADER_THINKING` (`minimal|low|medium|high`; vacío = el del modelo; es la principal
+palanca de latencia: `gemini-3.5-flash` usa `medium` por defecto, 4–11 s por generación).
 
 ## 3. Cómo observar el sistema (tu herramienta principal)
 
 `POST /chat` devuelve: `answer, flow, intent, sources[{title,section}], fallback_reason, cta_url, audit_log`.
 
-`fallback_reason`: `null` (respondió) | `no_documents` | `ungrounded` | `answer_mismatch` | `safety` | `off_topic`.
-`intent`: `business_question|greeting|smalltalk|capabilities|off_topic|unclear|safety`.
+`fallback_reason`: `null` (respondió) | `no_documents` | `ungrounded` | `answer_mismatch` | `safety` | `off_topic` | `technical` (técnica en ventas).
+`intent`: `business_question|technical_question|purchase|greeting|smalltalk|capabilities|off_topic|unclear|safety|handoff`.
 
 `audit_log` (solo el turno actual) es tu traza. Eventos:
 `turn_start(flow, client_type, filter)` · `safety_gate(flagged)` · `handoff_gate(requested)` · `handoff_response` · `classify_intent(intent, reason)` ·
 `rewrite_query(intent, queries, retry)` · `retrieve(queries, chunk_ids)` · `grade_documents(candidates, relevant_ids)` ·
 `generate(attempt, cited)` · `check_grounding(ok, reason: no_citations|unknown_citations|numeric_mismatch|llm_ungrounded)` ·
 `check_answer(ok, reason)` · `no_answer(reason)` · `finalize_support|finalize_sales` · `converse(intent)` ·
+`purchase_response(cta_url)` · `sales_technical_response(cta_url)` ·
 `security_event` (NO debería aparecer nunca: indica un chunk que violó el filtro; es una incidencia).
 
 Reproducir **en proceso** (sin HTTP, usa el código actual del disco, no el de un contenedor viejo):
@@ -93,7 +100,7 @@ python -m uv run python -m evals.run --only "x5" --runs 3 --show
 python -m uv run pytest                                  # unit + e2e con LLM/stores falsos, sin red
 python -m uv run pytest -m integration                   # requiere Postgres local; VACÍA kb_chunks → re-ingestar después
 ```
-Línea base conocida: 100 % (120/120) en preguntas de negocio y ~99 % (171/172) incluyendo conversación; los fallos
+Línea base conocida (2026-10-05): 100 % (342/342: 114 casos × 3). Antes: 100 % (120/120) en negocio y ~99 % (171/172) con conversación; los fallos
 residuales son rechazos ocasionales del verificador LLM en ventas. Los LLM son **no deterministas**: un caso que falla
 1 de 3 veces es un problema real (flaky), no ruido. Mide siempre con `--runs 3` o más.
 
@@ -111,13 +118,14 @@ Regla de oro: **cada pregunta mala que reportes debe quedar añadida a `evals/qu
    - Si está pero `grade_documents` no lo marca: prompt/umbral del evaluador.
 3. **`answer_mismatch` con respuesta correcta**: el verificador juzgó contra el texto crudo sin dominio. Debe usar la
    pregunta interpretada + contexto del negocio.
-4. **`ungrounded`**: mira `check_grounding.reason`. `numeric_mismatch` → compara las cifras de la respuesta con los
+4. **`ungrounded`**: mira `check_grounding.reason`. `numeric_mismatch` (el evento trae `missing`) → compara las cifras de la respuesta con los
    chunks citados (¿normalización de unidades/decimales? ¿cifra inventada de verdad?). `llm_ungrounded` intermitente →
    respuestas amplias que mezclan fragmentos; el generador debe ser conciso y citar solo lo que usa.
 5. **Falso positivo de seguridad** (p. ej. "x4 tiene cloro?" bloqueado): ajustar keywords en `config/safety.yaml`
    (la seguridad es deliberadamente conservadora; no la relajes para "mezclar", ingestión, ojos/piel).
 6. **Mal `intent`** (negocio tratado como charla o al revés): `prompts.INTENT`; regla de desempate hacia `business_question`.
-7. **El bot sugiere/da ejemplos que no sabe responder**: revisar `domain.capabilities` (solo ejemplos verificados).
+7. **El bot sugiere/da ejemplos que no sabe responder**: revisar `domain.capabilities` (solo ejemplos verificados) y
+   `clients.<tipo>.capabilities`: cada tipo de cliente ve documentos distintos (p. ej. bodega no ve el manual de hotel).
 8. **Ventas contesta contenido técnico o soporte filtra ventas**: NO debería poder pasar (particiones + roles RO +
    filtro). Si pasa, es un bug grave de aislamiento: avisa antes de tocar nada.
 9. **Cambié un documento y el bot no lo refleja**: hay que re-ingestar (`KB_DIR=docs/estructurados python -m uv run python -m eco_kb.ingest.run`)
@@ -130,14 +138,15 @@ Regla de oro: **cada pregunta mala que reportes debe quedar añadida a `evals/qu
   `ProtectedFieldError`). Ningún nodo LLM puede modificarlos.
 - `audience` y `client_types` de cada chunk salen de la RUTA del documento, nunca del frontmatter/contenido.
 - Cada flujo consulta SOLO su partición con su rol de BD de solo lectura; el filtro `client_types ∩ {ct, common}` es duro.
-- En ventas el CTA lo añade el código (`finalize_sales`), es la única URL de la respuesta; el LLM nunca inventa URLs.
+- En ventas el CTA lo añade el código (`finalize_sales`, y las respuestas fijas de `nodes/redirects.py`), es la única
+  URL de la respuesta; el LLM nunca inventa URLs.
 - El bot responde SOLO con lo que dicen los fragmentos; no inventa cifras, diluciones, tiempos ni códigos.
 - Toda la charla se limita al contexto del negocio y redirige siempre; nunca "se va por las ramas".
 - La seguridad (mezclas, ingestión, contacto, ventilación) va siempre primero y sin LLM.
 
 ## 7. Mapa de archivos (en `demo-eco/ECO-KB/`)
 
-- `config/clients.yaml`: `domain` (descripción, glosario, capabilities), tono/CTA/fallbacks por `client_type`. `config/safety.yaml`.
+- `config/clients.yaml`: `domain` (descripción, glosario, capabilities), `messages` (respuestas fijas), tono/CTA/fallbacks/capabilities por `client_type`. `config/safety.yaml`.
 - `src/eco_kb/graph/`: `builder.py` (grafo), `edges.py` (rutas puras), `prompts.py` (todos los prompts), `schemas.py`
   (salidas estructuradas), `state.py`, `services.py`, `nodes/{session,safety,intent,retrieval_nodes,generation,finalize,common}.py`.
 - `src/eco_kb/retrieval/{store,filters}.py`: búsqueda híbrida + RRF + filtros + catálogo.

@@ -11,6 +11,7 @@ const STATUS = {
 }
 const HANDOFF_REASONS = {
   user_request: 'El usuario pidió hablar con una persona',
+  purchase: 'Quiere comprar o pidió una cotización',
   repeated_fallback: 'El bot no pudo responder varias veces seguidas',
 }
 const FLOWS = { support: 'Soporte', sales: 'Ventas' }
@@ -97,7 +98,7 @@ function trace(log) {
         steps.push([`Relevantes: ${(e.relevant_ids || []).length}`, (e.relevant_ids || []).length ? '' : 'bad'])
         break
       case 'generate':
-        steps.push([`Generó #${e.attempt ?? '?'}`, ''])
+        steps.push(e.error ? [`Falló el LLM #${e.attempt ?? '?'}`, 'bad'] : [`Generó #${e.attempt ?? '?'}`, ''])
         break
       case 'check_grounding':
         steps.push([e.ok ? 'Respaldada ✓' : `Sin respaldo: ${e.reason || '?'}`, e.ok ? 'ok' : 'bad'])
@@ -110,6 +111,12 @@ function trace(log) {
         break
       case 'converse':
         steps.push(['Charla', ''])
+        break
+      case 'purchase_response':
+        steps.push(['Compra → equipo comercial', 'warn'])
+        break
+      case 'sales_technical_response':
+        steps.push(['Técnica en ventas → comercial', ''])
         break
       case 'security_event':
         steps.push(['🚨 security_event', 'bad'])

@@ -10,6 +10,11 @@ class Settings(BaseSettings):
     google_api_key: str = ""
     llm_generator_model: str = "google_genai:gemini-3.5-flash"
     llm_grader_model: str = "google_genai:gemini-3.5-flash-lite"
+    # Nivel de razonamiento (Gemini 3+: minimal | low | medium | high). Vacío = el del modelo.
+    # Generador en low: con medium (el default de gemini-3.5-flash) cada generación tarda 4-11 s; minimal no
+    # es más rápido que low y produce más borradores rechazados por el verificador (medido 2026-10-05).
+    llm_generator_thinking: str = "low"
+    llm_grader_thinking: str = ""
     embedding_model: str = "gemini-embedding-001"
     embedding_dim: int = 768
 

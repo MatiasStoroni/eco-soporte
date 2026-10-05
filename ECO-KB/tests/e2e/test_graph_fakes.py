@@ -191,3 +191,66 @@ def test_safety_goes_before_handoff(make_services):
     llm = FakeLLM(script(SUP["chunk_id"], "x"))
     out = run(make_services(llm, support_chunks=[SUP]), message="me salpicó en los ojos, pasame con una persona")
     assert out["fallback_reason"] == "safety" and not out["handoff_requested"]
+
+
+# ---------- respuestas fijas hacia el equipo comercial ----------
+
+@pytest.mark.parametrize("registered", [True, False])
+def test_purchase_skips_rag_requests_handoff_and_adds_cta(make_services, registered):
+    llm = FakeLLM({IntentOut: [IntentOut(intent="purchase")]})
+    svc = make_services(llm, support_chunks=[SUP], sales_chunks=[SAL])
+    out = run(svc, is_registered=registered, message="quiero comprar más x5")
+    assert out["intent"] == "purchase" and out["handoff_requested"] and out["fallback_reason"] is None
+    assert out["cta_url"] and out["final_answer"].endswith(out["cta_url"]) and out["sources"] == []
+    assert svc.support_store.filters == [] and svc.sales_store.filters == [] and [n for n, _ in llm.calls if n != "IntentOut"] == []
+
+
+def test_technical_question_in_sales_is_redirected_without_rag(make_services):
+    llm = FakeLLM({IntentOut: [IntentOut(intent="technical_question")]})
+    svc = make_services(llm, sales_chunks=[SAL])
+    out = run(svc, is_registered=False, client_type="bodega", message="como limpio con ozono?")
+    assert out["fallback_reason"] == "technical" and out["sources"] == []
+    assert out["cta_url"] and out["final_answer"].endswith(out["cta_url"]) and "bodega" in out["final_answer"]
+    assert svc.sales_store.filters == [] and llm.count("RewriteOut") == 0
+
+
+def test_technical_question_in_support_goes_through_rag(make_services):
+    s = script(SUP["chunk_id"], "Diluya EC-100 al 2%.")
+    s[IntentOut] = [IntentOut(intent="technical_question")]
+    out = run(make_services(FakeLLM(s), support_chunks=[SUP]))
+    assert out["fallback_reason"] is None and out["final_answer"] == "Diluya EC-100 al 2%."
+
+
+def test_capabilities_are_per_client_type(make_services):
+    llm = chat_llm("capabilities")
+    run(make_services(llm), client_type="bodega", message="q sabes hacer?")
+    system = next(m for n, m in llm.calls if n == "ChatReplyOut")[0][1]
+    assert "Carro Ozonify Industrial" in system and "paño" not in system  # bodega no ve el manual de hotel
+
+
+# ---------- fallos del LLM dentro del RAG: nunca tumban el turno ----------
+
+def _boom(m):
+    raise ValueError("salida estructurada vacía")
+
+
+def test_generate_failure_is_retried(make_services):
+    s = script(SUP["chunk_id"], "Diluya EC-100 al 2%.")
+    s[GenerationOut] = [_boom, GenerationOut(answer="Diluya EC-100 al 2%.", cited_chunk_ids=[SUP["chunk_id"]])]
+    out = run(make_services(FakeLLM(s), support_chunks=[SUP]))
+    assert out["fallback_reason"] is None and out["final_answer"] == "Diluya EC-100 al 2%."
+    assert [e.get("error") for e in out["audit_log"] if e["event"] == "generate"] == ["ValueError", None]
+
+
+def test_generate_always_failing_ends_in_fallback(make_services):
+    s = script(SUP["chunk_id"], "x")
+    s[GenerationOut] = [_boom]
+    out = run(make_services(FakeLLM(s), support_chunks=[SUP]))
+    assert out["fallback_reason"] == "ungrounded" and out["final_answer"]
+
+
+def test_grader_failures_degrade_gracefully(make_services):
+    s = script(SUP["chunk_id"], "Diluya EC-100 al 2%.")
+    s[RewriteOut], s[GradeOut], s[AnswerCheckOut] = [_boom], [_boom], [_boom]
+    out = run(make_services(FakeLLM(s), support_chunks=[SUP]))
+    assert out["fallback_reason"] is None and out["final_answer"] == "Diluya EC-100 al 2%."

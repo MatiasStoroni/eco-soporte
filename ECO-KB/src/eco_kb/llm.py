@@ -10,9 +10,14 @@ from langchain.chat_models import init_chat_model
 log = logging.getLogger(__name__)
 
 
-def make_chat_model(spec: str):
-    """spec con formato `proveedor:modelo` (p. ej. google_genai:gemini-2.5-flash)."""
-    return init_chat_model(spec, temperature=0)
+def make_chat_model(spec: str, thinking_level: str = ""):
+    """spec con formato `proveedor:modelo` (p. ej. google_genai:gemini-2.5-flash).
+
+    thinking_level (Gemini 3+: minimal | low | medium | high): vacío = el valor por defecto del modelo.
+    Es la principal palanca de latencia del generador.
+    """
+    extra = {"thinking_level": thinking_level} if thinking_level else {}
+    return init_chat_model(spec, temperature=0, **extra)
 
 
 class Embedder(Protocol):

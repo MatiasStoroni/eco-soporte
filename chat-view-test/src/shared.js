@@ -6,6 +6,7 @@ export const FALLBACKS = {
   answer_mismatch: 'La respuesta no contestaba la pregunta',
   safety: 'Respuesta de seguridad (enlatada, sin LLM)',
   off_topic: 'Fuera de tema',
+  technical: 'Consulta técnica: solo para clientes (redirige a comercial)',
 }
 
 export const esc = (s) =>

@@ -34,3 +34,14 @@ def test_after_intent():
     assert edges.after_intent({}) == "business"
     for i in ("greeting", "smalltalk", "capabilities", "off_topic", "unclear"):
         assert edges.after_intent({"intent": i}) == "chitchat"
+
+
+def test_after_intent_technical_only_reaches_rag_in_support():
+    assert edges.after_intent({"intent": "technical_question", "is_registered": True}) == "business"
+    assert edges.after_intent({"intent": "technical_question", "is_registered": False}) == "sales_technical"
+    assert edges.after_intent({"intent": "technical_question"}) == "sales_technical"  # sin registro: lo seguro
+
+
+def test_after_intent_purchase_in_both_flows():
+    for reg in (True, False):
+        assert edges.after_intent({"intent": "purchase", "is_registered": reg}) == "purchase"

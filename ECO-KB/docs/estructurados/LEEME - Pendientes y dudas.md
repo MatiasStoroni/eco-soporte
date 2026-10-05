@@ -16,6 +16,19 @@ Solo se reescribió el contenido que tenían los PDF, sin añadir nada. Faltan e
    "Panel de control · indicadores" son imágenes. Si tienen texto relevante (qué indica cada luz o botón, para
    qué industrias sirve), transcribirlo.
 
+## Equipos de ozono y bodegas (actualizado 2026-10-05)
+- Hay **dos equipos de ozono**: el **Carro Ozonify Industrial** (bodegas; su ficha está ahora en `soporte/bodega/`)
+  y **OZONIFY PRO** (hoteles y restaurantes). De OZONIFY PRO solo está cargado qué es (`soporte/hotel/` y
+  `soporte/restaurante/`): **falta su ficha técnica** (especificaciones, presión y caudal, panel, instalación).
+  Al recibirla, reemplazar la sección "Especificaciones y ficha técnica de OZONIFY PRO" en ambos archivos.
+- Confirmar la frase "es el equipo con el que se genera el agua ozonizada (OZONIFY)" de OZONIFY PRO.
+- **Bodega no tiene procedimientos propios**: limpieza de depósitos, tanques, barricas, vendimia, etc. Hoy un cliente
+  de bodega solo puede consultar el Carro Ozonify Industrial, X4 y X5; lo demás termina en "no tengo cargado".
+  Tampoco hay material comercial propio de bodega ni de restaurante.
+- Los clientes **genéricos** no ven ninguno de los dos equipos (cada ficha está en la carpeta de su segmento).
+- Regla de X3 añadida al manual de hotelería (confirmada por el equipo): **no se aplica sobre muebles de madera ni
+  tapizados**. Si hay más materiales prohibidos para X3, agregarlos en la sección de X3.
+
 ## Productos citados sin documentación
 El manual menciona **X3**, **SURFACE PROTECTANT**, **BIO SANITIZER** y **Blue Test** pero no hay ficha de ninguno.
 Si un cliente pregunta cómo usar X3 o qué es el Blue Test, el bot no tendrá nada que citar.

@@ -22,7 +22,7 @@ Los productos del sistema son OZONIFY, X3, SURFACE PROTECTANT y BIO SANITIZER, y
 OZONIFY limpia, desinfecta y desodoriza a través del agua ozonizada. Según la matriz de aplicación, es el producto de la limpieza diaria en las áreas del hotel.
 
 ## X3: qué es y para qué sirve
-X3 potencia el desengrase y la limpieza, y actúa de manera conjunta con el agua ozonizada (OZONIFY). Se usa cuando hay grasa, aceites o restos de materia orgánica a remover. Después de aplicar X3 se enjuaga.
+X3 potencia el desengrase y la limpieza, y actúa de manera conjunta con el agua ozonizada (OZONIFY). Se usa cuando hay grasa, aceites o restos de materia orgánica a remover. Después de aplicar X3 se enjuaga. X3 no se debe usar sobre muebles de madera ni sobre muebles tapizados.
 
 ## SURFACE PROTECTANT: qué es, para qué sirve y cuánto dura
 SURFACE PROTECTANT es una protección antimicrobiana para superficies, de larga duración. Su efecto prolongado dura aproximadamente 30 días, dependiendo del tipo de superficie. Por eso la protección se aplica con frecuencia mensual.
@@ -54,6 +54,7 @@ Cada color identifica un área exclusiva de trabajo. Los paños de microfibra, c
 - Usar los EPP necesarios durante la aplicación de productos y en todas las tareas de limpieza.
 - Todo el personal del establecimiento debe estar capacitado en la manipulación y aplicación de los productos del sistema ECO360.
 - Para la desodorización de ambientes, prestar atención especial a las áreas donde se perciben olores fuertes o persistentes, como los baños, rejillas y sumideros, y realizar aplicaciones adicionales de OZONIFY en caso necesario.
+- X3 no se debe aplicar sobre muebles de madera ni sobre muebles tapizados.
 - El código de colores trata de evitar y prevenir la contaminación cruzada y garantiza la estandarización de los procesos de limpieza.
 
 ## Procedimiento estándar de limpieza con ECO360 (diagrama de flujo)
@@ -87,19 +88,19 @@ La protección con SURFACE PROTECTANT es mensual y la verificación con Blue Tes
 - Cámaras frigoríficas: limpieza diaria.
 
 ## Aplicación de ECO360 en habitaciones
-Superficies principales: mesas de luz, escritorios, placares, puertas, picaportes, interruptores, muebles, pisos y vidrios interiores. Limpieza diaria con OZONIFY. Usar X3 solo si existen grasas, marcas difíciles o suciedad adherida. SURFACE PROTECTANT en mobiliario, picaportes, interruptores y superficies de alto contacto, con frecuencia mensual.
+Superficies principales: mesas de luz, escritorios, placares, puertas, picaportes, interruptores, muebles, pisos y vidrios interiores. Limpieza diaria con OZONIFY. Usar X3 solo si existen grasas, marcas difíciles o suciedad adherida. No aplicar X3 sobre muebles de madera ni tapizados. SURFACE PROTECTANT en mobiliario, picaportes, interruptores y superficies de alto contacto, con frecuencia mensual.
 
 ## Aplicación de ECO360 en baños
-Superficies principales: lavatorios, griferías, duchas, mamparas, bañeras, hidromasajes, porcelanato, cerámicos, inodoros, bidés y accesorios. Limpieza diaria con OZONIFY. Usar X3 siempre en presencia de jabón, grasa corporal, cosméticos o biofilm. SURFACE PROTECTANT en griferías, mamparas, porcelanatos, cerámicos, muebles, accesorios y superficies de contacto, con frecuencia mensual.
+Superficies principales: lavatorios, griferías, duchas, mamparas, bañeras, hidromasajes, porcelanato, cerámicos, inodoros, bidés y accesorios. Limpieza diaria con OZONIFY. Usar X3 siempre en presencia de jabón, grasa corporal, cosméticos o biofilm. No aplicar X3 sobre muebles de madera ni tapizados. SURFACE PROTECTANT en griferías, mamparas, porcelanatos, cerámicos, muebles, accesorios y superficies de contacto, con frecuencia mensual.
 
 ## Aplicación de ECO360 en cocina
-Superficies principales: mesadas, anafes, hornos, campanas, microondas, muebles, electrodomésticos y utensilios. Limpieza con OZONIFY. Se recomienda usar X3 en todas las limpiezas por la presencia habitual de grasas y proteínas. SURFACE PROTECTANT en mesadas, muebles, cámaras frigoríficas y superficies externas de equipos, con frecuencia mensual.
+Superficies principales: mesadas, anafes, hornos, campanas, microondas, muebles, electrodomésticos y utensilios. Limpieza con OZONIFY. Se recomienda usar X3 en todas las limpiezas por la presencia habitual de grasas y proteínas. No aplicar X3 sobre muebles de madera ni tapizados. SURFACE PROTECTANT en mesadas, muebles, cámaras frigoríficas y superficies externas de equipos, con frecuencia mensual.
 
 ## Aplicación de ECO360 en comedor y restaurante
-Superficies principales: mesas, sillas, mostradores, barras, vitrinas y mobiliario. Limpieza con OZONIFY. Usar X3 cuando existan restos grasos de alimentos o bebidas. SURFACE PROTECTANT en mesas, barras, mostradores y superficies de alto contacto, con frecuencia mensual.
+Superficies principales: mesas, sillas, mostradores, barras, vitrinas y mobiliario. Limpieza con OZONIFY. Usar X3 cuando existan restos grasos de alimentos o bebidas. No aplicar X3 sobre muebles de madera ni tapizados. SURFACE PROTECTANT en mesas, barras, mostradores y superficies de alto contacto, con frecuencia mensual.
 
 ## Aplicación de ECO360 en lobby y recepción
-Superficies principales: mostradores, escritorios, sillones, mesas, puertas, barandas y ascensores. Limpieza con OZONIFY. Usar X3 solo cuando exista suciedad adherida o grasa. SURFACE PROTECTANT en mostradores, mesas, picaportes, botones y barandas, con frecuencia mensual.
+Superficies principales: mostradores, escritorios, sillones, mesas, puertas, barandas y ascensores. Limpieza con OZONIFY. Usar X3 solo cuando exista suciedad adherida o grasa. No aplicar X3 sobre muebles de madera ni tapizados. SURFACE PROTECTANT en mostradores, mesas, picaportes, botones y barandas, con frecuencia mensual.
 
 ## Aplicación de ECO360 en pasillos
 Superficies principales: pisos, zócalos, puertas, pasamanos e interruptores. Limpieza con OZONIFY. X3 según necesidad. SURFACE PROTECTANT en pasamanos, picaportes e interruptores, con frecuencia mensual.
@@ -111,19 +112,19 @@ Superficies principales: botoneras, puertas, paredes y pasamanos. Limpieza con O
 Superficies principales: máquinas, pesas, bicicletas, colchonetas y bancos. Limpieza con OZONIFY. Usar X3 para remover sudor, grasa corporal y residuos orgánicos. SURFACE PROTECTANT en superficies de contacto, manijas, asientos y paneles, con frecuencia mensual.
 
 ## Aplicación de ECO360 en SPA
-Superficies principales: camillas, sillones, saunas, baños turcos, jacuzzis y griferías. Limpieza con OZONIFY. Usar X3 para aceites, cremas y cosméticos. SURFACE PROTECTANT en camillas, griferías, pasamanos y superficies táctiles, con frecuencia mensual.
+Superficies principales: camillas, sillones, saunas, baños turcos, jacuzzis y griferías. Limpieza con OZONIFY. Usar X3 para aceites, cremas y cosméticos. No aplicar X3 sobre muebles de madera ni tapizados. SURFACE PROTECTANT en camillas, griferías, pasamanos y superficies táctiles, con frecuencia mensual.
 
 ## Aplicación de ECO360 en vestidores
-Superficies principales: casilleros, bancos, puertas, espejos y picaportes. Limpieza con OZONIFY. X3 según necesidad. SURFACE PROTECTANT en casilleros, bancos, puertas y superficies táctiles, con frecuencia mensual.
+Superficies principales: casilleros, bancos, puertas, espejos y picaportes. Limpieza con OZONIFY. X3 según necesidad. No aplicar X3 sobre muebles de madera ni tapizados. SURFACE PROTECTANT en casilleros, bancos, puertas y superficies táctiles, con frecuencia mensual.
 
 ## Aplicación de ECO360 en cámaras frigoríficas
 Superficies principales: estantes, paredes, puertas, burletes y pisos. Limpieza con OZONIFY. Usar X3 cuando existan grasas o residuos alimentarios. SURFACE PROTECTANT en estantes, paredes, burletes y puertas, con frecuencia mensual.
 
 ## Aplicación de ECO360 en oficinas
-Superficies principales: escritorios, computadoras (solo la parte externa), teléfonos y muebles. Limpieza con OZONIFY. Usar X3 solo si existe suciedad grasa. SURFACE PROTECTANT en escritorios, teléfonos, picaportes e interruptores, con frecuencia mensual.
+Superficies principales: escritorios, computadoras (solo la parte externa), teléfonos y muebles. Limpieza con OZONIFY. Usar X3 solo si existe suciedad grasa. No aplicar X3 sobre muebles de madera ni tapizados. SURFACE PROTECTANT en escritorios, teléfonos, picaportes e interruptores, con frecuencia mensual.
 
 ## Aplicación de ECO360 en áreas comunes
-Superficies principales: mesas, sillones, barandas, muebles y puertas. Limpieza con OZONIFY. X3 según necesidad. SURFACE PROTECTANT en superficies de alto contacto, con frecuencia mensual.
+Superficies principales: mesas, sillones, barandas, muebles y puertas. Limpieza con OZONIFY. X3 según necesidad. No aplicar X3 sobre muebles de madera ni tapizados. SURFACE PROTECTANT en superficies de alto contacto, con frecuencia mensual.
 
 ## Aplicación de ECO360 en jardinería
 Superficies principales: macetas, floreros, fuentes y mobiliario exterior. Limpieza con OZONIFY, que se puede aplicar directamente en flores y plantas. El uso de X3 no es habitual. El uso de SURFACE PROTECTANT no es habitual y no se debe aplicar sobre plantas.

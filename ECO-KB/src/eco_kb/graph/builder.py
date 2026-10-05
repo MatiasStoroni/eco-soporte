@@ -6,6 +6,7 @@ from eco_kb.graph.nodes.finalize import make_finalize_sales, make_finalize_suppo
 from eco_kb.graph.nodes.generation import make_check_answer, make_check_grounding, make_generate
 from eco_kb.graph.nodes.handoff import make_handoff_gate, make_handoff_response
 from eco_kb.graph.nodes.intent import make_classify_intent, make_converse
+from eco_kb.graph.nodes.redirects import make_purchase_response, make_sales_technical_response
 from eco_kb.graph.nodes.retrieval_nodes import make_grade_documents, make_retrieve, make_rewrite_query
 from eco_kb.graph.nodes.safety import make_safety_gate, make_safety_response
 from eco_kb.graph.nodes.session import make_validate_session
@@ -60,6 +61,9 @@ def build_graph(services: Services, checkpointer=None):
     g.add_node("handoff_response", guarded("handoff_response", make_handoff_response(services)))
     g.add_node("classify_intent", guarded("classify_intent", make_classify_intent(services)))
     g.add_node("converse", guarded("converse", make_converse(services)))
+    g.add_node("purchase_response", guarded("purchase_response", make_purchase_response(services)))
+    g.add_node("sales_technical_response",
+               guarded("sales_technical_response", make_sales_technical_response(services)))
     g.add_node("router", lambda state: {})
     g.add_node("support_rag", build_rag_subgraph("support", services.support_store, services))
     g.add_node("sales_rag", build_rag_subgraph("sales", services.sales_store, services))
@@ -71,8 +75,11 @@ def build_graph(services: Services, checkpointer=None):
     g.add_conditional_edges("handoff_gate", edges.after_handoff,
                             {"handoff": "handoff_response", "continue": "classify_intent"})
     g.add_conditional_edges("classify_intent", edges.after_intent,
-                            {"business": "router", "chitchat": "converse"})
+                            {"business": "router", "chitchat": "converse", "purchase": "purchase_response",
+                             "sales_technical": "sales_technical_response"})
     g.add_edge("converse", END)
+    g.add_edge("purchase_response", END)
+    g.add_edge("sales_technical_response", END)
     g.add_conditional_edges("router", edges.route_by_registration,
                             {"support": "support_rag", "sales": "sales_rag"})
     g.add_edge("safety_response", END)

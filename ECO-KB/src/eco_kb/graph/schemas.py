@@ -2,7 +2,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-Intent = Literal["business_question", "greeting", "smalltalk", "capabilities", "off_topic", "unclear"]
+Intent = Literal["business_question", "technical_question", "purchase", "greeting", "smalltalk", "capabilities",
+                 "off_topic", "unclear"]
 
 
 class IntentOut(BaseModel):

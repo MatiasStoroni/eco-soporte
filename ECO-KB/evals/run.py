@@ -26,7 +26,8 @@ def build():
     sup = make_pool(s.database_url_support_ro, "ev_sup")
     sal = make_pool(s.database_url_sales_ro, "ev_sal")
     services = Services(
-        generator_llm=make_chat_model(s.llm_generator_model), grader_llm=make_chat_model(s.llm_grader_model),
+        generator_llm=make_chat_model(s.llm_generator_model, s.llm_generator_thinking),
+        grader_llm=make_chat_model(s.llm_grader_model, s.llm_grader_thinking),
         support_store=PgChunkStore("support", sup, s.top_k, s.candidate_k),
         sales_store=PgChunkStore("sales", sal, s.top_k, s.candidate_k),
         embedder=GeminiEmbedder(s.google_api_key, s.embedding_model, s.embedding_dim),
@@ -43,9 +44,17 @@ def check(case: dict, out: dict) -> tuple[bool, str]:
     chat_only = "intent" in case and "expect" not in case and "business_question" not in wanted
     if "intent" in case and not chat_only and "expect" not in case:
         return (out.get("fallback_reason") != "off_topic", "una pregunta de negocio no debe tratarse como charla")
-    if chat_only:  # conversación: sin fuentes, sin URLs
-        if out.get("sources") or "http" in out.get("answer", ""):
+    answer = out.get("answer", "").lower()
+    # contains: alguna subcadena debe estar en la respuesta; absent: ninguna puede estar.
+    if case.get("contains") and not any(x.lower() in answer for x in case["contains"]):
+        return False, f"la respuesta no contiene ninguno de {case['contains']}"
+    if hit := [x for x in case.get("absent", []) if x.lower() in answer]:
+        return False, f"la respuesta contiene {hit}"
+    if chat_only:  # conversación y respuestas fijas: sin fuentes; la única URL posible es el CTA del código
+        if out.get("sources") or ("http" in answer and not out.get("cta_url")):
             return False, "la charla no debe citar fuentes ni URLs"
+        return True, ""
+    if case.get("fallback") == "maybe":  # negarse o decir que el dato no está cargado: ambas valen
         return True, ""
     if case.get("fallback"):
         return (out.get("fallback_reason") is not None, "debía negarse y respondió")
@@ -88,11 +97,13 @@ def main() -> None:
     fails, ok = [], 0
     for (flow, c), out in results:
         good, why = check(c, {"fallback_reason": out.get("fallback_reason"), "sources": out.get("sources", []),
-                                "intent": out.get("intent"), "answer": out.get("final_answer", "")})
+                                "intent": out.get("intent"), "answer": out.get("final_answer", ""),
+                                "cta_url": out.get("cta_url")})
         ok += good
         if not good:
             q = next((f'{e["intent"]} | {e["queries"]}' for e in out["audit_log"] if e["event"] == "rewrite_query"), "?")
-            fails.append((flow, c["q"], why, q if "intent" not in c else out.get("final_answer", "")[:200]))
+            show_answer = "intent" in c or "contains" in c or "absent" in c
+            fails.append((flow, c["q"], why, out.get("final_answer", "")[:300] if show_answer else q))
     if args.show:
         for (flow, c), out in results:
             if "intent" in c and "expect" not in c:

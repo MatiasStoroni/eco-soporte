@@ -14,8 +14,17 @@ def after_handoff(state: dict) -> str:
 
 
 def after_intent(state: dict) -> str:
-    """Solo las preguntas de negocio llegan al RAG; el resto lo atiende el nodo conversacional."""
-    return "business" if state.get("intent", "business_question") == "business_question" else "chitchat"
+    """Solo las preguntas de negocio llegan al RAG; el resto lo atiende el nodo conversacional.
+
+    Las técnicas van al RAG en soporte; en ventas, a una respuesta fija (ventas nunca da contenido técnico).
+    Un pedido de compra va a una respuesta fija que deriva al equipo comercial, en ambos flujos.
+    """
+    intent = state.get("intent", "business_question")
+    if intent == "purchase":
+        return "purchase"
+    if intent == "technical_question":
+        return "business" if state.get("is_registered") is True else "sales_technical"
+    return "business" if intent == "business_question" else "chitchat"
 
 
 def after_grading(state: dict, *, max_ret: int) -> str:

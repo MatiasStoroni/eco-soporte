@@ -49,7 +49,7 @@ def make_converse(services: Services):
 
     def converse(state: dict) -> dict:
         intent, flow = state["intent"], state["flow"]
-        capabilities = getattr(dom.capabilities, flow)
+        capabilities = services.config.capabilities(flow, state["client_type"])
         system = prompts.CONVERSE.format(
             domain=domain, capabilities=" ".join(capabilities.split()),
             tone=services.config.clients[state["client_type"]].tone, language=state.get("language", "es"),

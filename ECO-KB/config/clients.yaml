@@ -2,16 +2,18 @@
 domain:
   description: >-
     Empresa de sistemas y productos de higiene profesional (limpieza, desinfección, desengrase y
-    protección de superficies, con agua ozonizada) para hotelería, gastronomía e industria. Su sistema
-    principal es ECO360 y su línea de productos.
+    protección de superficies, con agua ozonizada) para hotelería, gastronomía, bodegas e industria, en todas
+    las áreas del establecimiento (habitaciones, baños, cocinas, áreas comunes, spa, jardines y plantas). Su
+    sistema principal es ECO360 y su línea de productos.
   # Qué puede hacer el asistente en cada flujo: lo usa para responder "¿qué sabes hacer?" sin inventar.
+  # Es el valor general (lo que ven TODOS los tipos de cliente: documentos de soporte/comun y ventas/comun).
+  # Si un tipo de cliente ve más o menos documentos, se sobreescribe en clients.<tipo>.capabilities.
   capabilities:
     support: >-
-      Ayudas a clientes registrados con dudas técnicas sobre el sistema ECO360 y sus productos: diluciones
-      y dosis, modo de uso, procedimientos de limpieza por área, código de colores, frecuencias de
-      aplicación, especificaciones del Carro Ozonify, almacenamiento y precauciones de uso. Ejemplos de preguntas
-      que sabes responder: "¿Qué color de paño uso para los inodoros?", "¿Cuál es la dilución de X4 para
-      sarro normal?", "¿Qué dosis de X5 uso para un shock sanitario?", "¿Qué presión necesita el Carro Ozonify?".
+      Ayudas a clientes registrados con dudas técnicas sobre los productos del sistema ECO360 X4 (desincrustante)
+      y X5 (potenciador oxidativo): diluciones y dosis, modo de uso, aplicaciones, ingredientes, almacenamiento,
+      presentaciones y precauciones. Ejemplos de preguntas que sabes responder: "¿Cuál es la dilución de X4 para
+      sarro normal?", "¿Qué dosis de X5 uso para un shock sanitario?", "¿Cómo se guarda el X5?".
     sales: >-
       Ayudas a quienes quieren conocer el sistema ECO360: qué es, qué beneficios aporta (rentabilidad,
       conservación de activos, experiencia de clientes, sustentabilidad) y en qué se diferencia de la
@@ -20,10 +22,25 @@ domain:
       "¿Me ayuda a ahorrar costos?".
   glossary:
     - "X3, X4, X5, OZONIFY, SURFACE PROTECTANT, BIO SANITIZER y Blue Test son productos o componentes del sistema ECO360 (nunca marcas o modelos de otros sectores)."
-    - "Equivalencias: inodoro = wc = sanitario = retrete; paño = trapo = microfibra; desincrustante = X4; potenciador oxidativo = X5; protector de superficies = SURFACE PROTECTANT; carro = Carro Ozonify."
+    - "Equivalencias: inodoro = wc = sanitario = retrete; paño = trapo = microfibra; desincrustante = X4; potenciador oxidativo = X5; protector de superficies = SURFACE PROTECTANT."
+    - "Equipo de ozono = generador de ozono = máquina de ozono = ozonizador. Hay dos: el Carro Ozonify Industrial (bodegas) y OZONIFY PRO (hoteles y restaurantes). 'Ozonify' o 'el equipo de ozono' a secas es el equipo del tipo de cliente: en bodega, el Carro Ozonify Industrial; en hotel o restaurante, OZONIFY PRO. 'Carro de ozono' o 'carro Ozonify' es el Carro Ozonify Industrial."
     - "Abreviaturas frecuentes: q = qué/que, pa = para, xq = por qué, cuanto = cuánto, tmb = también."
 
+# Respuestas fijas, sin RAG (en ventas y en compras el código añade después el enlace comercial).
+messages:
+  # Ventas nunca da contenido técnico (cómo usar, diluciones, dosis, procedimientos, especificaciones).
+  sales_technical: >-
+    Las indicaciones técnicas de uso (aplicación, diluciones, dosis o procedimientos) forman parte del soporte
+    que reciben los clientes de ECO360. Puedo contarte qué es ECO360 y qué beneficios aporta, o nuestro equipo
+    comercial puede asesorarte.
+  # Quiere comprar, reponer o pedir una cotización: la conversación queda pendiente en el panel (motivo "compra").
+  purchase: >-
+    ¡Genial! Le aviso a nuestro equipo comercial para que se comunique con vos y gestione tu pedido.
+    También podés contactarlos directamente:
+
 # Un bloque por client_type. Si falta uno (o su CTA), la app no arranca.
+# capabilities (opcional): sobreescribe domain.capabilities para ese cliente; usar solo ejemplos que ese cliente
+# puede consultar (depende de las carpetas soporte/<tipo> y ventas/<tipo> que ve).
 clients:
   bodega:
     tone: "Técnico y cercano. Usa vocabulario enológico (depósitos, barricas, vendimia) solo si aparece en la información disponible."
@@ -31,8 +48,19 @@ clients:
       text: "Si quieres una propuesta para tu bodega, habla con nuestro equipo comercial:"
       base_url: "https://ecoclean.example/bodegas"
     fallback:
-      support: "No he encontrado esa información en la documentación técnica. Consulta la ficha del producto o contacta con soporte técnico."
+      # Todavía no hay procedimientos propios de bodega (depósitos, barricas, tanques): decir qué sí sabe.
+      support: >-
+        Todavía no tengo cargados procedimientos específicos de bodega para esa consulta. Sí puedo ayudarte con el
+        Carro Ozonify Industrial (funcionamiento y especificaciones) y con las diluciones y dosis de X4 y X5. Para
+        lo demás, contacta con soporte técnico.
       sales: "No tengo ese dato a mano, pero nuestro equipo comercial puede resolverlo."
+    capabilities:
+      support: >-
+        Ayudas a clientes registrados con dudas técnicas sobre el Carro Ozonify Industrial (el equipo de ozono para
+        bodegas: funcionamiento, panel, especificaciones, presión y caudal de agua) y sobre los productos X4
+        (desincrustante) y X5 (potenciador oxidativo): diluciones, dosis, modo de uso y almacenamiento. Ejemplos de
+        preguntas que sabes responder: "¿Qué presión de agua necesita el Carro Ozonify Industrial?", "¿Cuánto X5
+        uso por litro?", "¿Cuál es la dilución de X4 para sarro normal?".
   hotel:
     tone: "Profesional y claro, orientado a operativa de housekeeping, lavandería y mantenimiento."
     cta:
@@ -41,6 +69,13 @@ clients:
     fallback:
       support: "No he encontrado esa información en la documentación técnica. Consulta la ficha del producto o contacta con soporte técnico."
       sales: "No tengo ese dato a mano, pero nuestro equipo comercial puede resolverlo."
+    capabilities:
+      support: >-
+        Ayudas a clientes registrados con dudas técnicas sobre el sistema ECO360 en hotelería y sus productos:
+        procedimientos de limpieza por área, qué producto usar según la suciedad, código de colores, frecuencias,
+        diluciones de X4, dosis de X5, almacenamiento y precauciones de uso. Ejemplos de preguntas que sabes
+        responder: "¿Qué color de paño uso para los inodoros?", "¿Cuál es la dilución de X4 para sarro normal?",
+        "¿Qué dosis de X5 uso para un shock sanitario?", "¿Cuánto dura el SURFACE PROTECTANT?".
   restaurante:
     tone: "Práctico y directo, orientado a cocina, higiene alimentaria y rapidez."
     cta:

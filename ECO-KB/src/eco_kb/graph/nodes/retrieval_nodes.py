@@ -9,6 +9,7 @@ from eco_kb.retrieval.filters import RetrievalFilter, violates_filter
 from eco_kb.retrieval.store import RRF_K
 
 log = logging.getLogger("eco_kb.security")
+err_log = logging.getLogger("eco_kb.retrieval")
 
 FUSED_TOP = 10
 MAX_QUERIES = 4
@@ -49,9 +50,14 @@ def make_rewrite_query(services: Services, store):
         system = prompts.REWRITE.format(
             domain=prompts.domain_context(domain.description, domain.glossary),
             catalog=format_catalog(store.catalog(f)), language=state.get("language", "es"), hint=hint,
+            client_type=state["client_type"],
         )
         user = f"Historial:\n{history_text(state['messages'])}\n\nÚltimo mensaje del usuario: {state['message']}"
-        out: RewriteOut = llm.invoke([("system", system), ("human", user)])
+        try:
+            out: RewriteOut = llm.invoke([("system", system), ("human", user)])
+        except Exception:  # sin reescritura se busca con el mensaje tal cual
+            err_log.exception("rewrite_query falló; se busca con el mensaje original")
+            out = RewriteOut(intent=state["message"], queries=[state["message"]])
         queries = [q.strip() for q in out.queries if q.strip()][:MAX_QUERIES] or [out.intent]
         return {"query": out.intent, "queries": queries,
                 "audit_log": audit("rewrite_query", intent=out.intent, queries=queries, retry=retry)}
@@ -93,12 +99,16 @@ def make_grade_documents(services: Services):
         if candidates:
             # 2) una única llamada en lote
             body = "\n\n".join(f"[{d['chunk_id']}]\n{d['content']}" for d in candidates)
-            out: GradeOut = llm.invoke([
-                ("system", prompts.GRADE.format(domain=domain)),
-                ("human", f"Pregunta del usuario: {state['message']}\nPregunta interpretada: {state['query']}"
-                          f"\n\nFragmentos:\n{body}"),
-            ])
-            ok_ids = {g.chunk_id for g in out.grades if g.relevant}
+            try:
+                out: GradeOut = llm.invoke([
+                    ("system", prompts.GRADE.format(domain=domain)),
+                    ("human", f"Pregunta del usuario: {state['message']}\nPregunta interpretada: {state['query']}"
+                              f"\n\nFragmentos:\n{body}"),
+                ])
+                ok_ids = {g.chunk_id for g in out.grades if g.relevant}
+            except Exception:  # mismo criterio que el prompt: ante la duda, relevante (la verificación filtra)
+                err_log.exception("grade_documents falló; se pasan todos los candidatos")
+                ok_ids = {d["chunk_id"] for d in candidates}
             relevant = [d for d in candidates if d["chunk_id"] in ok_ids]
         return {
             "relevant_docs": relevant,

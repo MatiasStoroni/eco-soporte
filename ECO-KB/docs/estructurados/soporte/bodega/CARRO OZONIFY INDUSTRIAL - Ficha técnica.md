@@ -6,7 +6,7 @@ language: es
 ---
 
 ## Qué es y qué hace el Carro Ozonify Industrial
-El CARRO OZONIFY INDUSTRIAL genera una solución estabilizada de ozono en agua (SOW, Stabilized Ozone in Water) convirtiendo el agua de red en agua ozonizada capaz de eliminar la grasa, destruir el 99,9% de los patógenos y eliminar los malos olores. Limpia, desengrasa, desodoriza y desinfecta superficies, procesos y ambientes de producción. Solo requiere conexión eléctrica y a la red de agua potable. Utilizando la capacidad de mezcla automática de potenciadores de ozono se obtienen distintos beneficios en la limpieza. Ficha técnica del equipo de ozono industrial, Revisión 0, 23/09/2026.
+El CARRO OZONIFY INDUSTRIAL es el equipo de ozono de ECO360 para bodegas. Genera una solución estabilizada de ozono en agua (SOW, Stabilized Ozone in Water) convirtiendo el agua de red en agua ozonizada capaz de eliminar la grasa, destruir el 99,9% de los patógenos y eliminar los malos olores. Limpia, desengrasa, desodoriza y desinfecta superficies, procesos y ambientes de producción. Solo requiere conexión eléctrica y a la red de agua potable. Utilizando la capacidad de mezcla automática de potenciadores de ozono se obtienen distintos beneficios en la limpieza. Ficha técnica del equipo de ozono industrial, Revisión 0, 23/09/2026.
 
 ## Display y panel de control del Carro Ozonify Industrial
 Al conectar el adaptador a un tomacorriente, el equipo queda conectado y en espera: emite un sonido y se enciende la pantalla. La pantalla muestra el caudal y el total de agua consumida, información de los potenciadores cargados, y permite acceder al menú de configuraciones.
