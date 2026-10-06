@@ -33,7 +33,7 @@ from pydantic import BaseModel, Field
 
 from eco_kb.drive.extract import DOCX, PDF, extract_with_pages
 from eco_kb.graph.nodes.generation import check_numeric_claims
-from eco_kb.ingest.format_check import FormatReport, check_format
+from eco_kb.ingest.format_check import check_format
 from eco_kb.ingest.loader import IngestError, load_text, parse_markdown
 
 log = logging.getLogger("eco_kb.restructure")
@@ -130,17 +130,24 @@ class Source:
         return self.mime == PDF
 
 
-def load_source(path: Path) -> Source:
-    data = path.read_bytes()
-    ext = path.suffix.lower()
-    mime = PDF if ext == ".pdf" else DOCX if ext == ".docx" else mimetypes.guess_type(path.name)[0] or "text/markdown"
-    text, empty = extract_with_pages(path.name, mime, data)
+def source_from_bytes(name: str, data: bytes) -> Source:
+    ext = Path(name).suffix.lower()
+    if ext not in SUPPORTED:
+        raise ValueError(f"formato no soportado: {name} (se aceptan {', '.join(SUPPORTED)})")
+    mime = PDF if ext == ".pdf" else DOCX if ext == ".docx" else mimetypes.guess_type(name)[0] or "text/markdown"
+    text, empty = extract_with_pages(name, mime, data)
     text = text.replace("\r\n", "\n")  # archivos con CRLF (Windows): el hash del borrador no debe depender de eso
     images = 0
     if ext == ".docx":  # mammoth incrusta las imágenes como data URI: ruido para el texto
         images = len(_DOCX_IMAGE.findall(text))
         text = _DOCX_IMAGE.sub("", text).strip()
-    return Source(path, data, mime, text, empty, images)
+    return Source(Path(name), data, mime, text, empty, images)
+
+
+def load_source(path: Path) -> Source:
+    src = source_from_bytes(path.name, path.read_bytes())
+    src.path = path
+    return src
 
 
 # --- IA -----------------------------------------------------------------------------------------------------
@@ -198,6 +205,17 @@ def _frontmatter(meta: dict, body: str) -> str:
     return "---\n" + yaml.safe_dump(meta, allow_unicode=True, sort_keys=False, width=1000) + "---\n\n" + body + "\n"
 
 
+PROVENANCE_KEYS = ("fuente", "fuente_sha256", "borrador_sha256")
+
+
+def without_provenance(md: str) -> str:
+    """Sin los datos de procedencia del frontmatter: solo los usa el comando para no reprocesar (en el panel, el
+    original y su hash viven en la base) y en el editor son ruido."""
+    raw, body = parse_markdown(md)
+    meta = {k: v for k, v in raw.items() if k not in PROVENANCE_KEYS}
+    return _frontmatter(meta, body.strip()) if meta else body.strip() + "\n"
+
+
 def with_provenance(text: str, src: Source) -> str:
     """El documento tal cual, con la procedencia en el frontmatter (para no volver a procesarlo)."""
     raw, body = parse_markdown(text)
@@ -219,40 +237,89 @@ def render(b: Borrador, src: Source) -> str:
     return _frontmatter(meta, body)
 
 
-def review_report(src: Source, b: Borrador, fmt: FormatReport, added: list[str], lost: list[str],
-                  obs: list[Observacion], ingest_error: str | None) -> tuple[str, int]:
-    """Texto del <nombre>.revision.txt y cantidad de alertas."""
-    alerts = len(added) + len(lost) + len(obs) + len(fmt.problems) + bool(ingest_error)
-    image_sections = [s.titulo for s in b.secciones if s.desde_imagen]
+class NeedsAI(Exception):
+    """El documento no tiene buen formato y no hay IA configurada (falta GOOGLE_API_KEY)."""
+
+
+@dataclass
+class Prepared:
+    markdown: str
+    used_ai: bool
+    review: dict  # {used_ai, reason, alerts, blocks: [{title, items, alert}]}: lo que muestra el panel
+
+    @property
+    def alerts(self) -> int:
+        return self.review["alerts"]
+
+
+def _block(title: str, items: list[str], alert: bool = False) -> dict | None:
+    return {"title": title, "items": items, "alert": alert} if items else None
+
+
+def prepare(src: Source, audience: str, ai: Restructurer | None, valid_client_types: set[str],
+            rel: Path | None = None) -> Prepared:
+    """Fuente → markdown listo para la KB. Sin IA si el formato ya es válido. `rel` = ruta para validar la carga."""
+    fmt = check_format(src.text, src.empty_pages)
+    if fmt.ok:
+        blocks = [_block("Avisos de formato (no impiden publicarlo)", fmt.warnings)]
+        return Prepared(with_provenance(src.text, src), False,
+                        {"used_ai": False, "reason": [], "alerts": 0, "blocks": [x for x in blocks if x]})
+    if ai is None:
+        raise NeedsAI("; ".join(fmt.problems))
+
+    b = ai.restructure(src, audience)
+    md = render(b, src)
+    body = parse_markdown(md)[1]
+    draft_fmt = check_format(md)
+    # Cifras agregadas: solo se pueden comparar las secciones que salen de texto (las de imágenes no están en el
+    # texto extraíble y se listan aparte para revisarlas a mano). Cifras perdidas: contra todo el borrador.
+    from_text = "\n\n".join(_section(s) for s in b.secciones if not s.desde_imagen)
+    original = _DATE.sub(" ", src.text)  # "23/09/2026" no es una proporción (y la fecha de revisión se descarta)
+    added = check_numeric_claims(_DATE.sub(" ", from_text), [original])
+    lost = check_numeric_claims(original, [body])
+    obs = ai.verify(src, md)
+    ingest_error = None
+    try:
+        load_text(rel or Path(audience, "borradores", f"{src.path.stem}.md"), md, valid_client_types)
+    except (IngestError, ValueError) as exc:
+        ingest_error = str(exc)
+
+    blocks = [
+        _block("No se puede cargar en la KB", [ingest_error] if ingest_error else [], True),
+        _block("Cifras que no están en el texto del original (¿inventadas o mal copiadas?)", added, True),
+        _block("Cifras del original que no aparecen en el borrador", lost, True),
+        _block("Observaciones del verificador", [f"[{o.seccion}] «{o.texto}»: {o.problema}" for o in obs], True),
+        _block("Problemas de formato del borrador", draft_fmt.problems, True),
+        _block("Secciones que salen de imágenes: sus cifras no se pueden chequear solas, compararlas con el original",
+               [s.titulo for s in b.secciones if s.desde_imagen]),
+        _block("Pendientes que marcó la IA (ilegible, ambiguo o contradictorio)", b.pendientes),
+        _block("Avisos de formato", draft_fmt.warnings),
+        _block("Imágenes del DOCX", [f"El original tiene {src.images} imágenes que la IA no leyó: si tienen texto, "
+                                     "transcribilo a mano."] if src.images else []),
+    ]
+    blocks = [x for x in blocks if x]
+    alerts = sum(len(x["items"]) for x in blocks if x["alert"])
+    return Prepared(md, True, {"used_ai": True, "reason": fmt.problems, "alerts": alerts, "blocks": blocks})
+
+
+def review_text(review: dict, source_name: str) -> str:
+    """El <nombre>.revision.txt del comando (el panel muestra lo mismo)."""
+    n = review["alerts"]
     lines = [
-        f"Borrador generado con IA a partir de «{src.path.name}» ({time.strftime('%Y-%m-%d %H:%M')}).",
-        f"Estado: {'REVISAR: ' + str(alerts) + ' alertas automáticas' if alerts else 'sin alertas automáticas'}"
+        f"Borrador generado con IA a partir de «{source_name}» ({time.strftime('%Y-%m-%d %H:%M')}).",
+        f"Estado: {'REVISAR: ' + str(n) + ' alertas automáticas' if n else 'sin alertas automáticas'}"
         " (igual hay que leerlo entero contra el original).",
         "",
         "Antes de publicarlo: compará con el original y corregí lo necesario en el .md (una vez editado, este",
         "comando no lo vuelve a pisar). Después, movelo a su carpeta final o dejalo acá, volvé a ingerir y",
         "tildá en el panel (Archivos) qué clientes lo consultan. Este .txt no se ingiere: borralo al terminar.",
     ]
-
-    def block(title: str, items: list[str]):
-        if items:
-            lines.extend(["", f"## {title}", *[f"- {i}" for i in items]])
-
-    block("No se pudo cargar en la KB", [ingest_error] if ingest_error else [])
-    block("Cifras que no están en el texto del original (¿inventadas o mal copiadas?)", added)
-    block("Cifras del original que no aparecen en el borrador", lost)
-    block("Observaciones del verificador", [f"[{o.seccion}] «{o.texto}»: {o.problema}" for o in obs])
-    block("Secciones que salen de imágenes: sus cifras no se pueden chequear solas, compararlas con el PDF",
-          image_sections)
-    block("Pendientes que marcó la IA (ilegible, ambiguo o contradictorio)", b.pendientes)
-    block("Formato", fmt.problems + fmt.warnings)
-    if src.images:
-        block("Imágenes del DOCX", [f"El original tiene {src.images} imágenes que la IA no leyó: si tienen texto, "
-                                    "transcribilo a mano."])
-    return "\n".join(lines) + "\n", alerts
+    for blk in review["blocks"]:
+        lines.extend(["", f"## {blk['title']}", *[f"- {i}" for i in blk["items"]]])
+    return "\n".join(lines) + "\n"
 
 
-# --- un archivo ---------------------------------------------------------------------------------------------
+# --- un archivo (comando) -----------------------------------------------------------------------------------
 
 @dataclass
 class Result:
@@ -278,42 +345,26 @@ def process(path: Path, audience: str, out_dir: Path, ai: Restructurer | None, v
             return Result(path, "protected", "el destino existe y fue editado a mano (o no lo generó este "
                           "comando): no se pisa. Usá --forzar para regenerarlo", out)
 
-    fmt = check_format(src.text, src.empty_pages)
-    if fmt.ok:
+    try:
+        prep = prepare(src, audience, None if only_check else ai, valid_client_types,
+                       Path(audience, out_dir.name, out.name))
+    except NeedsAI as exc:
+        if only_check:
+            return Result(path, "invalid", str(exc))
+        return Result(path, "error", "hace falta IA y no hay GOOGLE_API_KEY")
+    if not prep.used_ai:
         if not same_file and not only_check:
             out_dir.mkdir(parents=True, exist_ok=True)
-            out.write_text(with_provenance(src.text, src), encoding="utf-8")
+            out.write_text(prep.markdown, encoding="utf-8")
             report_path.unlink(missing_ok=True)
-        extra = f" (avisos: {'; '.join(fmt.warnings)})" if fmt.warnings else ""
+        warnings = [i for blk in prep.review["blocks"] for i in blk["items"]]
+        extra = f" (avisos: {'; '.join(warnings)})" if warnings else ""
         return Result(path, "kept", f"formato válido: se usa tal cual, sin IA{extra}",
                       None if same_file or only_check else out)
-    if only_check:
-        return Result(path, "invalid", "; ".join(fmt.problems))
-    if ai is None:
-        return Result(path, "error", "hace falta IA y no hay GOOGLE_API_KEY")
-
-    b = ai.restructure(src, audience)
-    md = render(b, src)
-    body = parse_markdown(md)[1]
-    draft_fmt = check_format(md)
-    # Cifras agregadas: solo se pueden comparar las secciones que salen de texto (las de imágenes no están en el
-    # texto extraíble y se listan aparte para revisarlas a mano). Cifras perdidas: contra todo el borrador.
-    from_text = "\n\n".join(_section(s) for s in b.secciones if not s.desde_imagen)
-    original = _DATE.sub(" ", src.text)  # "23/09/2026" no es una proporción (y la fecha de revisión se descarta)
-    added = check_numeric_claims(_DATE.sub(" ", from_text), [original])
-    lost = check_numeric_claims(original, [body])
-    obs = ai.verify(src, md)
-    try:
-        load_text(Path(audience, out_dir.name, out.name), md, valid_client_types)
-        ingest_error = None
-    except (IngestError, ValueError) as exc:
-        ingest_error = str(exc)
-    report, alerts = review_report(src, b, draft_fmt, added, lost, obs, ingest_error)
     out_dir.mkdir(parents=True, exist_ok=True)
-    out.write_text(md, encoding="utf-8")
-    report_path.write_text(report, encoding="utf-8")
-    why = "; ".join(fmt.problems)
-    return Result(path, "ai", f"reformateado con IA ({why})", out, alerts)
+    out.write_text(prep.markdown, encoding="utf-8")
+    report_path.write_text(review_text(prep.review, src.path.name), encoding="utf-8")
+    return Result(path, "ai", f"reformateado con IA ({'; '.join(prep.review['reason'])})", out, prep.alerts)
 
 
 def collect(paths: list[str]) -> list[Path]:

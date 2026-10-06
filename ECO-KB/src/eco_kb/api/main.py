@@ -12,7 +12,8 @@ from eco_kb.conversations import ConversationStore
 from eco_kb.db import make_pool
 from eco_kb.graph.builder import build_graph
 from eco_kb.graph.services import Services
-from eco_kb.kb_documents import DocumentStore
+from eco_kb.ingest.restructure import GeminiRestructurer
+from eco_kb.kb_documents import DocumentStore, recover_interrupted
 from eco_kb.llm import GeminiEmbedder, make_chat_model
 from eco_kb.retrieval.store import PgChunkStore
 from eco_kb.settings import get_settings
@@ -31,14 +32,19 @@ async def lifespan(app: FastAPI):
     checkpointer.setup()
     conversations = ConversationStore(admin)
     conversations.setup()
-    documents = DocumentStore(admin, list(cfg.clients))
-    documents.setup()  # migración de la KB (manifiesto + RLS); idempotente y sin re-embeber
+    embedder = GeminiEmbedder(s.google_api_key, s.embedding_model, s.embedding_dim)
+    # IA para reorganizar los archivos subidos que no tienen buen formato (los que sí, se publican sin IA).
+    ai = GeminiRestructurer(s.google_api_key, s.llm_restructure_model or s.llm_generator_model,
+                            cfg.domain.description) if s.google_api_key else None
+    documents = DocumentStore(admin, list(cfg.clients), embedder=embedder, ai=ai)
+    documents.setup()  # migraciones de la KB (manifiesto, RLS, gestión desde el panel); idempotentes, sin re-embeber
+    recover_interrupted(admin)
     services = Services(
         generator_llm=make_chat_model(s.llm_generator_model, s.llm_generator_thinking),
         grader_llm=make_chat_model(s.llm_grader_model, s.llm_grader_thinking),
         support_store=PgChunkStore("support", support, s.top_k, s.candidate_k),
         sales_store=PgChunkStore("sales", sales, s.top_k, s.candidate_k),
-        embedder=GeminiEmbedder(s.google_api_key, s.embedding_model, s.embedding_dim),
+        embedder=embedder,
         config=cfg, min_vector_score=s.min_vector_score, max_ret=s.max_ret, max_gen=s.max_gen,
     )
     app.state.graph = build_graph(services, checkpointer)

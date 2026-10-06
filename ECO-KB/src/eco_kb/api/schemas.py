@@ -54,3 +54,23 @@ class DocumentVisibility(BaseModel):
     source_id: str = Field(min_length=1, max_length=500)
     client_types: list[str] = Field(max_length=20)  # [] = sin habilitar; ["common"] = todos
     author: str | None = Field(default=None, max_length=80)
+
+
+class DocumentRef(BaseModel):
+    audience: Literal["support", "sales"]
+    source_id: str = Field(min_length=1, max_length=500)
+    author: str | None = Field(default=None, max_length=80)
+
+
+class DocumentUpload(BaseModel):
+    """El archivo va en base64 (sin multipart, para no sumar dependencias). Límite: MAX_UPLOAD_BYTES."""
+    audience: Literal["support", "sales"]
+    filename: str = Field(min_length=1, max_length=255)
+    content_base64: str = Field(min_length=1, max_length=21_000_000)
+    client_types: list[str] = Field(default_factory=list, max_length=20)  # solo para documentos nuevos
+    source_id: str | None = Field(default=None, max_length=500)            # reemplazar ese documento
+    author: str | None = Field(default=None, max_length=80)
+
+
+class DraftUpdate(DocumentRef):
+    markdown: str = Field(min_length=1, max_length=2_000_000)

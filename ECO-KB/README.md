@@ -76,7 +76,8 @@ crea la migración de `src/eco_kb/kb_documents.py`, que corre sola al arrancar l
 
 ## Preparar documentos nuevos (IA solo si hace falta)
 
-Cuando llega un PDF o Word sin el formato que necesita el RAG:
+Lo habitual es **subirlos desde el panel** (ver "Panel de administración" → Archivos), que hace todo esto solo. Desde
+consola, para archivos del repo:
 
 ```bash
 python -m uv run python -m eco_kb.ingest.restructure "ruta/al/archivo.pdf" --audiencia soporte
@@ -182,16 +183,24 @@ la conversación a mano.
   - Responder desde la caja de abajo: si la conversación no estaba tomada, la toma sola.
   - *Devolver al bot* o *Descartar* (en una derivación pendiente) la devuelve al bot.
   - El cliente ve los mensajes del equipo en el chat sin recargar.
-- **Archivos** (botón del header, o `/admin#archivos`): qué tipos de cliente consultan cada documento de la KB.
-  - Lista agrupada en Soporte / Ventas, con título, ruta, producto y cantidad de fragmentos.
-  - Casillas **Todos (común)**, Hotel, Bodega, Restaurante, Genérico y **Guardar** por fila. Sin ninguna tildada,
-    el archivo queda **Sin habilitar** (el bot no lo consulta).
-  - Los cambios aplican al instante, sin re-ingestar ni redeployar. Soporte y ventas son bases separadas: la
-    audiencia la define la carpeta y no se cambia desde acá.
+- **Archivos** (botón del header, o `/admin#archivos`): **toda la base de conocimiento**.
+  - **Subir**: arrastrar o elegir un PDF, Word (.docx) o Markdown de hasta 15 MB, indicar si es de **soporte** o
+    de **ventas** (no se cambia después) y, opcionalmente, qué clientes lo consultan.
+    - Si ya tiene buen formato, se **publica directo, sin IA**.
+    - Si no, la IA lo reorganiza (también lee las páginas que son imágenes) y queda un **borrador para revisar**:
+      el bot no lo usa hasta que alguien lo publica.
+    - La lista muestra "Procesando…" y avisa cuando termina (unos 30 s si usa IA).
+  - **Revisar borrador / Ver y editar**: abre el editor con las alertas de la revisión automática (cifras
+    agregadas o perdidas, observaciones del verificador, secciones que salen de imágenes, pendientes), el texto
+    editable y la vista previa. "Guardar borrador" no cambia lo que usa el bot; "Publicar" sí, al instante.
+  - **Reemplazar archivo**: sube una versión nueva y conserva quién lo consulta. **Descargar original** y
+    **Eliminar**.
+  - **Visibilidad**: casillas **Todos (común)**, Hotel, Bodega, Restaurante, Genérico y **Guardar** por fila. Sin
+    ninguna tildada, el archivo queda **Sin habilitar**. Aplica al instante.
   - Filtros: búsqueda por título o ruta, y **¿Qué ve…? [tipo]** para revisar de un vistazo qué consulta, por
     ejemplo, un cliente de bodega.
-  - Los archivos se siguen cargando por repo o Drive + ingesta; un archivo nuevo arranca con la visibilidad que
-    sugiere su carpeta.
+  - Los documentos que vinieron del repo también se editan acá; al publicarlos desde el panel, la ingesta desde
+    archivos ya no los toca.
 
 ### Cómo está implementado
 
@@ -288,14 +297,20 @@ tocar el proxy de Vite ni el contenedor, y se recupera solo si la API se reinici
 | `PUT /admin/messages/{id}/review` `{rating: "good" \| "bad" \| null, note, author}` | Revisar una respuesta |
 | `GET /admin/documents` | Archivos de la KB con su visibilidad, más los tipos de cliente (`clients.yaml` + `common`) |
 | `PUT /admin/documents/visibility` `{audience, source_id, client_types, author}` | Cambiar qué tipos consultan un archivo (422 si un tipo no existe) |
+| `POST /admin/documents/upload` `{audience, filename, content_base64, client_types?, source_id?, author}` | Subir (o reemplazar) un archivo; se procesa en segundo plano |
+| `GET /admin/documents/detail?audience=&source_id=` | Documento con su texto publicado, el borrador y la revisión |
+| `GET /admin/documents/original?audience=&source_id=` | Descargar el archivo subido |
+| `PUT /admin/documents/draft` `{audience, source_id, markdown, author}` | Guardar una edición como borrador |
+| `POST /admin/documents/publish` · `/discard-draft` · `/delete` `{audience, source_id, author}` | Publicar, descartar el borrador, eliminar |
 | `GET /chat/{id}/updates?after=<id>` (sin contraseña) | Polling del chat |
 
 **Tests**: `tests/unit/test_handoff_gate.py` (patrones), `tests/e2e/test_graph_fakes.py` (derivación sin LLM y
 seguridad primero), `tests/e2e/test_api_fakes.py` (contraseña y vista Archivos con un store falso) y
 `tests/integration/test_conversations_pg.py` (ciclo completo contra Postgres:
 `python -m uv run python -m pytest -m integration tests/integration/test_conversations_pg.py`).
-`tests/integration/test_kb_documents_pg.py` cubre la visibilidad, la reutilización de embeddings y la migración
-(⚠️ vacía `kb_chunks` y `kb_documents`).
+`tests/integration/test_kb_documents_pg.py` cubre la visibilidad, la reutilización de embeddings y la migración, y
+`test_kb_panel_pg.py` el ciclo subir → borrador/publicado → editar → borrar (⚠️ los dos vacían `kb_chunks` y
+`kb_documents`).
 
 **Limitaciones conocidas**:
 

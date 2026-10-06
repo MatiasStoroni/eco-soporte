@@ -23,9 +23,9 @@ Si algo de acá contradice al código, **manda el código**: actualizá este arc
 | Flujos | `support` (`is_registered=true`, documentación técnica + fuentes) y `sales` (`is_registered=false`, comercial + CTA) |
 | Tipos de cliente | `hotel`, `bodega`, `restaurante`, `generic` |
 | Modelos | Generar: `google_genai:gemini-3.5-flash` (thinking `low`). Clasificar/reescribir/evaluar: `google_genai:gemini-3.5-flash-lite`. Embeddings: `gemini-embedding-001` a 768 dims |
-| Panel admin | `/admin` en la vista, contraseña `admin` (env `ADMIN_TOKEN`) |
+| Panel admin | `/admin` en la vista, contraseña `admin` (env `ADMIN_TOKEN`). Conversaciones + **base de conocimiento** (los operadores suben, revisan y publican los archivos ahí) |
 | Servidor | `/proyectos/eco-soporte-dev` (usuario `dev-user`). Vista en `:8088`, API en `127.0.0.1:8000` |
-| Tests | 125 unit/e2e sin red (`pytest`); 30 de integración (`-m integration`, **destructivos**, ver §9) |
+| Tests | 126 unit/e2e sin red (`pytest`); 37 de integración (`-m integration`, **destructivos**, ver §9) |
 | Evals | `evals/questions.yaml` + `evals/run.py`, con LLM real (gasta cuota). Línea base 2026-10-05: 100 % (342/342 = 114 casos × 3) |
 
 ---
@@ -50,13 +50,17 @@ Si una tarea parece requerir romper una de estas reglas, **frená y preguntá al
 
    Si alguna vez aparece `security_event` o ventas devuelve contenido técnico, es un **bug grave**: avisá antes
    de tocar nada.
-3. **La audiencia sale de la RUTA; la visibilidad, del manifiesto `kb_documents`; nunca del contenido.**
-   - `audience` = carpeta de primer nivel (`soporte|ventas`). No se edita desde el panel: es la partición de
-     aislamiento más fuerte.
+3. **La KB se gestiona desde el panel y su fuente de verdad es `kb_documents`; nunca el contenido decide quién lo ve.**
+   - `audience` se elige al subir el archivo (o sale de la carpeta de primer nivel, en los que vinieron del repo) y
+     **no se cambia después**: es la partición de aislamiento más fuerte.
    - `client_types` = lo que el equipo tilda en el panel (`/admin` → Archivos), guardado en `kb_documents` y copiado
-     a cada fragmento. La subcarpeta (`hotel/`, `comun/`, otra → sin habilitar) es solo la sugerencia inicial de un
-     archivo nuevo; la ingesta **nunca** pisa lo elegido en el panel.
-   - El loader rechaza el documento si el frontmatter define `audience` o `client_type(s)`.
+     a cada fragmento. En los archivos del repo, la subcarpeta es solo la sugerencia inicial; nada lo pisa después.
+   - El loader rechaza el documento si el frontmatter define `audience` o `client_type(s)` (también al editarlo en
+     el panel).
+   - **El bot nunca usa un borrador**: lo que la IA reorganiza queda en `draft_markdown` hasta que una persona lo
+     revisa y lo publica. Solo se publica directo, sin revisión, lo que ya vino con buen formato.
+   - Los documentos subidos desde el panel **solo existen en la base**, no en git: el volumen hay que respaldarlo
+     (§10.4).
 4. **Las URLs las pone el código.** El LLM nunca: `strip_urls` las quita.
    - En ventas, `finalize_sales` agrega el CTA con UTM y verifica con `assert` que sea la **única** URL.
    - Las respuestas fijas de `nodes/redirects.py` hacen lo mismo.
@@ -88,8 +92,8 @@ Si una tarea parece requerir romper una de estas reglas, **frená y preguntá al
 | Cambiar tono, CTA o textos de fallback por cliente | §6.1 | `clients.<tipo>` en `clients.yaml` |
 | Falso positivo o negativo de seguridad | §6.2 | `config/safety.yaml` + `tests/unit/test_safety_gate.py` |
 | La derivación a humano se dispara de más o de menos | §5.3, §6.3 | `config/handoff.yaml` + `tests/unit/test_handoff_gate.py` |
-| Agregar o cambiar documentos de la KB | §8 | `ECO-KB/docs/estructurados/...` + volver a ingerir |
-| Llega un PDF/Word de las operadoras sin formato | §8.5 | `python -m eco_kb.ingest.restructure` (IA solo si hace falta) |
+| Agregar o cambiar documentos de la KB | §8.2 | **Panel → Archivos** (subir, revisar, publicar). El repo (`docs/estructurados` + ingesta) es legado |
+| Un archivo subido quedó en error o con un borrador raro | §8.5 | Ver `error`/`review` del documento; `ingest/format_check.py`, prompts de `restructure.py` |
 | Un cliente no ve un documento (o ve uno que no debería) | §8.2 | Visibilidad en el panel (`/admin` → Archivos) |
 | Agregar un tipo de cliente | §8.4 | `ClientType` en `state.py` + `clients.yaml` + carpetas |
 | Cambiar el panel o el chat (UI) | §5 | `chat-view-test/src/{admin,main}.js`, `*.css` |
@@ -238,7 +242,14 @@ Un `client_type` fuera de la lista devuelve 422. Si la conversación está en `h
 | `POST /admin/conversations/{id}/messages` `{content, author}` | Bearer | Responder como persona (toma la conversación si hace falta) |
 | `PUT /admin/messages/{id}/review` `{rating: good\|bad\|null, note, author}` | Bearer | Calificar una respuesta del bot |
 | `GET /admin/documents` | Bearer | `{client_types: [{id, label}], documents: [...]}`. Los tipos salen de `clients.yaml` (+ `common` = Todos) |
-| `PUT /admin/documents/visibility` `{audience, source_id, client_types, author}` | Bearer | Cambiar qué tipos consultan un archivo. 422 si un tipo no existe; `common` se normaliza a `["common"]`; `[]` = sin habilitar. Vacía la caché del catálogo. El `source_id` va en el body porque tiene barras |
+| `PUT /admin/documents/visibility` `{audience, source_id, client_types, author}` | Bearer | Cambiar qué tipos consultan un archivo. 422 si un tipo no existe; `common` se normaliza a `["common"]`; `[]` = sin habilitar. Vacía la caché del catálogo. El `source_id` va en el body (o en la query) porque tiene barras |
+| `POST /admin/documents/upload` `{audience, filename, content_base64, client_types?, source_id?, author}` | Bearer | 202 + documento en `processing`; se procesa en segundo plano (`BackgroundTasks`). Con `source_id` reemplaza ese documento; con el mismo nombre de archivo, también. 422: formato, tamaño, base64 o tipo inválido |
+| `GET /admin/documents/detail?audience=&source_id=` | Bearer | Documento + `markdown` publicado, `draft_markdown` y `review` |
+| `GET /admin/documents/original?audience=&source_id=` | Bearer | Descarga el archivo subido (404 si vino del repo) |
+| `PUT /admin/documents/draft` `{audience, source_id, markdown, author}` | Bearer | Guarda una edición como borrador y devuelve el chequeo de formato. 422 si no se podría cargar (p. ej. frontmatter con `client_types`) |
+| `POST /admin/documents/publish` `{audience, source_id, author}` | Bearer | Publica el borrador: trocea, embebe solo lo nuevo y vacía la caché del catálogo |
+| `POST /admin/documents/discard-draft` | Bearer | Descarta el borrador (si nunca se publicó, borra el documento) |
+| `POST /admin/documents/delete` | Bearer | Borra el documento y sus fragmentos |
 
 Bearer = `Authorization: Bearer <ADMIN_TOKEN>`, comparado con `secrets.compare_digest`. Sin token configurado
 → 503; token incorrecto → 401. FastAPI expone `/docs` en la API (`:8000`, solo localhost en el servidor).
@@ -263,10 +274,20 @@ Bearer = `Authorization: Bearer <ADMIN_TOKEN>`, comparado con `secrets.compare_d
   que mapea los eventos del `audit_log`). Si agregás un evento nuevo al grafo, agregalo también a `trace()`.
 - Revisión 👍/👎 con nota. "Copiar caso de eval" genera una línea para `evals/questions.yaml`.
 - Enlaces directos con `#<session_id>`: escucha `hashchange`.
-- **Vista Archivos** (`#archivos`, botón "Archivos" del header): lista los documentos de `kb_documents`
-  agrupados por audiencia, con casillas por tipo de cliente ("Todos (común)" deshabilita las individuales; sin
-  ninguna, badge "Sin habilitar"), "Guardar" por fila, búsqueda y filtro "¿Qué ve…? [tipo]". En esta vista se
-  pausa el refresco de conversaciones. Los tipos vienen de la API, no están hardcodeados.
+- **Vista Archivos** (`#archivos`, botón "Archivos" del header): **toda la base de conocimiento**.
+  - **Subir** (arrastrar o elegir; PDF, DOCX o MD, hasta 15 MB): se elige soporte o ventas y, opcionalmente,
+    los tipos de cliente. El archivo va en base64 (sin multipart) y se procesa en segundo plano. La vista consulta
+    cada 3 s mientras haya algo "Procesando…" y avisa con un toast cuando termina.
+  - **Estado por documento**: Procesando / Error (con el motivo) / Borrador para revisar (· N alertas) / Publicado
+    / Publicada la versión anterior (hay un borrador nuevo).
+  - **Acciones por fila**: casillas de visibilidad + "Guardar"; "Ver y editar" o "Revisar borrador"; "Reemplazar
+    archivo" (conserva la visibilidad; si el nuevo necesita IA, la versión publicada sigue hasta que se publique el
+    borrador); "Descargar original"; "Eliminar".
+  - **Editor** (`<dialog>`, pantalla completa en el celular): la revisión automática (alertas, secciones que salen
+    de imágenes, pendientes), el Markdown editable, la vista previa (títulos y tablas) y los botones "Guardar
+    borrador", "Publicar" (pide confirmación si quedan alertas) y "Descartar borrador".
+  - Búsqueda y filtro "¿Qué ve…? [tipo]". En esta vista se pausa el refresco de conversaciones. Los tipos vienen
+    de la API, no están hardcodeados.
 
 ### 5.3 Derivación (último recurso: el bot tiene libertad para responder)
 
@@ -415,7 +436,7 @@ Tiene tres secciones: `support`, `sales` y `chat` (estos casos corren en **ambos
 | `checkpoints`, `checkpoint_blobs`, `checkpoint_writes`, `checkpoint_migrations` | `PostgresSaver.setup()` al arrancar la API | Memoria del bot por `thread_id` = `session_id` |
 | `chat_conversations` | `ConversationStore.setup()` al arrancar | PK `session_id`; `is_registered`, `flow`, `client_type`, `language`, `status` (CHECK `bot`/`pending`/`human`), `handoff_reason`, `handoff_at`, `assignee`, `created_at`, `updated_at` |
 | `chat_messages` | Ídem | `id bigserial`, `session_id` (FK, cascade), `role` (CHECK `user`/`bot`/`human`/`system`), `content`, `author`, `flow`, `intent`, `fallback_reason`, `sources jsonb`, `cta_url`, `latency_ms`, `audit_log jsonb`, `rating` (CHECK `good`/`bad`), `review_note`, `reviewed_by`, `created_at` |
-| `kb_documents` | Migración v1 de `kb_documents.setup()` (al arrancar la API y en cada ingesta) | Manifiesto: PK `(audience, source_id)`; `title`, `product`, `client_types text[]` (`{}` = sin habilitar), `updated_by`, `updated_at`, `created_at`. Los roles RO **no** tienen acceso |
+| `kb_documents` | Migraciones v1 y v2 de `kb_documents.setup()` (al arrancar la API y en cada ingesta) | **Fuente de verdad de la KB.** PK `(audience, source_id)`; `title`, `product`, `client_types text[]` (`{}` = sin habilitar), `origin` (`files` = vino del repo/Drive, `panel`), `markdown` (versión publicada), `draft_markdown` (borrador sin publicar), `review jsonb` (revisión automática), `state` (`processing`/`ready`/`error`) + `error`, `original bytea` + `original_name` + `original_sha256`, `published_at`, `updated_by`, `updated_at`, `created_at`. Los roles RO **no** tienen acceso |
 | `kb_schema_migrations` | Ídem | Versiones aplicadas (`version`, `applied_at`). La migración toma un advisory lock y es idempotente |
 | `kb_sources` | `drive/sync.py` (solo si se usa Drive) | Estado de la sincronización con Drive |
 
@@ -433,14 +454,33 @@ Los crean `sql/000_bootstrap.sql` (parametrizado con `admin_user`) y `sql/init-d
 `cardinality(client_types) > 0` de `kb_chunks`, siembra el manifiesto con lo ya ingerido, recalcula `content_hash`
 en SQL (`sha256` del contenido; **no re-embebe**) y activa la **RLS** (`ENABLE ROW LEVEL SECURITY` + política
 `kb_client_types` `FOR SELECT TO rag_<aud>_ro`). El admin es dueño de las tablas y no está sujeto a RLS.
+**Migración v2**: agrega las columnas de gestión desde el panel (`origin`, `markdown`, `draft_markdown`, `review`,
+`state`, `error`, `original*`, `published_at`). Lo existente queda como `origin = 'files'`. Al arrancar, la API pasa
+a `error` lo que haya quedado en `processing` por un reinicio (`recover_interrupted`).
+
 `sql/001_init.sql` no cambió: la migración es la fuente de verdad para bases nuevas y existentes. Para agregar otra,
 sumá una versión a `MIGRATIONS`; no edites una ya aplicada.
 
 ### 8.2 Base de conocimiento: estructura y visibilidad
 
-La fuente es `ECO-KB/docs/estructurados/<soporte|ventas>/<carpeta>/*.md` (acepta alias en español:
-`soporte`→`support`, `ventas`→`sales`, `comun`→`common`). Los PDF originales están en `ECO-KB/docs/`; `kb/` es un
-ejemplo viejo y no se usa.
+**Se gestiona desde el panel** (`/admin` → Archivos; `DocumentStore` en `kb_documents.py`). Ciclo de un archivo subido:
+
+1. `upload` guarda el original (`origin = 'panel'`, `state = 'processing'`). `source_id` =
+   `<soporte|ventas>/panel/<nombre>.md`: subir otro archivo con el mismo nombre en la misma audiencia lo reemplaza.
+2. `process` (en segundo plano) corre `prepare()` (§8.5):
+   - si el archivo **ya tiene buen formato**, se guarda tal cual y se **publica directo**, sin IA;
+   - si no, la IA arma un **borrador** (`draft_markdown` + `review`) y nadie lo ve hasta que se publica;
+   - los errores (p. ej. hace falta IA y no hay `GOOGLE_API_KEY`) quedan en `state = 'error'` + `error`.
+3. Revisión en el editor: `save_draft` guarda las ediciones como borrador, `publish` trocea y embebe solo lo nuevo
+   (vía `ingest(..., origin="panel")`) y `discard_draft` descarta (si nunca se publicó, borra el documento).
+4. `delete` borra el documento y sus fragmentos.
+
+**Legado, el repo** (`ECO-KB/docs/estructurados/<soporte|ventas>/<carpeta>/*.md`, con alias en español: `soporte`→
+`support`, `ventas`→`sales`, `comun`→`common`): la ingesta desde archivos sigue funcionando (`origin = 'files'`) y
+guarda el Markdown en `kb_documents` para poder editarlo en el panel.
+- Al editar, publicar o reemplazar desde el panel un documento que vino del repo, pasa a `origin = 'panel'`, y
+  desde ahí **la ingesta desde archivos lo saltea** (stat `panel`) y nunca lo borra.
+- Los PDF originales están en `ECO-KB/docs/`; `kb/` es un ejemplo viejo y no se usa.
 
 **Visibilidad** (quién consulta cada archivo):
 
@@ -513,7 +553,13 @@ Por lo tanto, en soporte:
    Archivos toma los tipos de la API.
 5. Agregar casos a las evals.
 
-### 8.5 Preparar documentos nuevos (`src/eco_kb/ingest/restructure.py` + `format_check.py`)
+### 8.5 Preparar documentos: formato y reorganización con IA (`ingest/format_check.py` + `ingest/restructure.py`)
+
+El núcleo es `prepare(src, audiencia, ai, ...)`: de los bytes de un archivo a Markdown listo para la KB, más una
+revisión estructurada (`review = {used_ai, reason, alerts, blocks: [{title, items, alert}]}`). Lo usan **el panel**
+(cada archivo subido, en `DocumentStore.process`) y el comando de consola de abajo, que es lo mismo pero sobre
+archivos del repo. En el panel, lo que tiene buen formato se guarda **tal cual vino** y al borrador de la IA se le
+sacan los datos de procedencia (`without_provenance`), porque el original y su hash viven en la base.
 
 ```bash
 # desde ECO-KB/
@@ -571,8 +617,8 @@ la API, sin CORS. El panel queda en `http://localhost:5173/admin`.
 
 | Para | Comando |
 |---|---|
-| Tests sin red (125) | `python -m uv run python -m pytest -q` |
-| Integración | `python -m uv run python -m pytest -m integration` ⚠️ **`test_isolation_pg`, `test_drive_sync` y `test_kb_documents_pg` hacen `TRUNCATE kb_chunks, kb_documents`**: después hay que volver a ingerir y **volver a elegir la visibilidad en el panel** (se pierde; p. ej. Restaurante en OZONIFY PRO). Alternativa sin cuota: `pg_dump -Fc` antes y `pg_restore --clean` después (los 2 errores de constraints heredadas son esperables). `test_conversations_pg` es seguro (solo borra sus sesiones `test-*`) |
+| Tests sin red (126) | `python -m uv run python -m pytest -q` |
+| Integración | `python -m uv run python -m pytest -m integration` ⚠️ **`test_isolation_pg`, `test_drive_sync`, `test_kb_documents_pg` y `test_kb_panel_pg` hacen `TRUNCATE kb_chunks, kb_documents`** (también borran los documentos subidos desde el panel): después hay que volver a ingerir y **volver a elegir la visibilidad en el panel** (se pierde; p. ej. Restaurante en OZONIFY PRO). Alternativa sin cuota: `pg_dump -Fc` antes y `pg_restore --clean` después (los 2 errores de constraints heredadas son esperables). `test_conversations_pg` es seguro (solo borra sus sesiones `test-*`) |
 | Evals | `python -m uv run python -m evals.run --flow support\|sales --runs 3 [--only "texto"] [--show]` (gasta cuota) |
 | Preparar documentos | `python -m uv run python -m eco_kb.ingest.restructure <archivos> --audiencia soporte\|ventas [--solo-validar]` (IA solo para los que no tienen formato; ver §8.5) |
 | Consultar la base local | `docker exec eco-kb-db-1 psql -U ecokb -d ecokb -c "select chunk_id, section_path from kb_chunks_support"` |
@@ -627,7 +673,8 @@ cd /proyectos/eco-soporte-dev && git pull && docker compose up -d --build
 
 `--build` hace falta **siempre** que cambie código o configuración, porque se copian a la imagen.
 
-Si cambiaron documentos de la KB, además hay que ingerir:
+Los documentos se gestionan desde el panel: no hace falta ingerir nada al desplegar. Solo si cambiaron archivos del
+repo (legado) hay que ingerir:
 
 ```bash
 docker compose run --rm -e KB_DIR=docs/estructurados -v ./ECO-KB/docs:/app/docs:ro api python -m eco_kb.ingest.run
@@ -644,7 +691,8 @@ Logs: `docker compose logs -f api web db`. Base: `docker exec -it eco-db psql -U
 | Objetivo | Comando | Efecto |
 |---|---|---|
 | Limpiar conversaciones y conservar la KB (lo habitual) | `docker exec eco-db psql -U eco -d ecokb -c "TRUNCATE chat_messages, chat_conversations, checkpoints, checkpoint_blobs, checkpoint_writes;"` | Panel vacío y bot sin memoria. Instantáneo, sin cuota. **No tocar `checkpoint_migrations`** |
-| Empezar de cero | `docker compose down -v` → `up -d --build` → ingerir | Borra **todo**, incluida la KB (recalcular los embeddings gasta cuota) |
+| **Respaldar la KB** (hacerlo antes de cualquier reset) | `docker exec eco-db pg_dump -U eco -d ecokb -Fc -f /tmp/ecokb.dump && docker cp eco-db:/tmp/ecokb.dump ./ecokb-$(date +%F).dump` | Los documentos subidos desde el panel **solo existen en la base**. Restaurar: `docker cp` + `pg_restore -U eco -d ecokb --clean --if-exists` (2 errores de constraints heredadas son esperables) |
+| Empezar de cero | `docker compose down -v` → `up -d --build` → ingerir | Borra **todo**, incluida la KB: los documentos del repo se recuperan ingiriendo (gasta cuota); **los subidos desde el panel se pierden** salvo que haya un respaldo |
 | Error `password authentication failed` (se cambiaron las `ECOKB_*_PASSWORD` después de crear el volumen) | Para la demo: empezar de cero | Las contraseñas solo se aplican al crear el volumen |
 
 ---

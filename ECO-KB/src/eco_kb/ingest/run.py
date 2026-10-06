@@ -36,38 +36,53 @@ UPDATE kb_chunks SET source_id = %(source_id)s, title = %(title)s, section_path 
 WHERE audience = %(audience)s AND chunk_id = %(chunk_id)s
 """
 
-STAT_KEYS = ("embedded", "reused", "meta_only", "unchanged", "deleted")
+STAT_KEYS = ("embedded", "reused", "meta_only", "unchanged", "deleted", "panel")
 
 
 def _vec_literal(v) -> str:
     return "[" + ",".join(f"{x:.8f}" for x in v) + "]"
 
 
-def ingest(records: list[ChunkRecord], pool, embedder: Embedder,
-           keep_sources: set[str] | None = None) -> dict[str, Counter]:
+def ingest(records: list[ChunkRecord], pool, embedder: Embedder, keep_sources: set[str] | None = None,
+           texts: dict[str, str] | None = None, origin: str = "files") -> dict[str, Counter]:
     """Upsert de `records`. `keep_sources` = fuentes que siguen existiendo aunque no vengan en `records`
     (p. ej. sin cambios o con error de lectura): sus chunks NO se borran. Por defecto, las de `records`.
+
+    origin="files" (repo/Drive, la KB completa): los documentos gestionados desde el panel se saltean (stat
+    `panel`) y nunca se borran. `texts` = {source_id: markdown} para poder editarlos después en el panel.
+    origin="panel" (publicar un documento desde el panel): solo se tocan las fuentes de `records`.
 
     La visibilidad (client_types) sale del manifiesto `kb_documents`: los de `records` son solo la sugerencia de
     la carpeta para las fuentes nuevas. Solo se embebe un contenido (content_hash) que no esté ya en la base.
     Estadísticas: embedded (llamó al embedder), reused (embedding de otra fila con el mismo contenido),
-    meta_only (mismo contenido, cambió algún metadato), unchanged, deleted."""
+    meta_only (mismo contenido, cambió algún metadato), unchanged, deleted, panel (salteados)."""
     kb_documents.setup(pool)  # por si la ingesta corre antes que la API
     stats = {k: Counter() for k in STAT_KEYS}
-    rec_sources = {r.source_id for r in records}
-    keep_sources = rec_sources if keep_sources is None else keep_sources | rec_sources
     with pool.connection() as conn:
-        with conn.transaction():
-            sources = {(r.audience, r.source_id): {"title": r.title, "product": r.product,
-                                                   "client_types": r.client_types} for r in records}
-            visibility = kb_documents.sync_sources(conn, sources, keep_sources)
-        for r in records:
-            r.client_types = visibility[(r.audience, r.source_id)]
-
         rows = conn.execute(
             f"SELECT audience, chunk_id, content_hash, {', '.join(_META_FIELDS)} FROM kb_chunks"
         ).fetchall()
         existing = {(r["audience"], r["chunk_id"]): r for r in rows}
+        if origin == "panel":
+            keep_sources = {r["source_id"] for r in rows}
+        else:
+            panel = {r["source_id"] for r in conn.execute(
+                "SELECT source_id FROM kb_documents WHERE origin = 'panel'").fetchall()}
+            for r in records:
+                if r.source_id in panel:
+                    stats["panel"][r.audience] += 1
+            records = [r for r in records if r.source_id not in panel]
+            keep_sources = (keep_sources or set()) | panel
+        rec_sources = {r.source_id for r in records}
+        keep_sources = (keep_sources or set()) | rec_sources
+
+        with conn.transaction():
+            sources = {(r.audience, r.source_id): {"title": r.title, "product": r.product,
+                                                   "client_types": r.client_types,
+                                                   "markdown": (texts or {}).get(r.source_id)} for r in records}
+            visibility = kb_documents.sync_sources(conn, sources, keep_sources, origin)
+        for r in records:
+            r.client_types = visibility[(r.audience, r.source_id)]
         pending, meta_only = [], []
         for r in records:
             old = existing.get((r.audience, r.chunk_id))
@@ -125,11 +140,16 @@ def main() -> int:
     records, errors = load_kb(Path(s.kb_dir), set(cfg.clients))
     for e in errors:
         log.error("RECHAZADO %s", e)
+    kb = Path(s.kb_dir)
+    texts = {p.relative_to(kb).as_posix(): p.read_text(encoding="utf-8")
+             for p in kb.rglob("*.md") if p.parent != kb}  # para editarlos después desde el panel
     pool = make_pool(s.database_url_admin, "ingest", max_size=2)
     embedder = GeminiEmbedder(s.google_api_key, s.embedding_model, s.embedding_dim)
-    stats = ingest(records, pool, embedder)
+    stats = ingest(records, pool, embedder, texts=texts)
     for k, c in stats.items():
         log.info("%-10s support=%d sales=%d", k, c["support"], c["sales"])
+    if sum(stats["panel"].values()):
+        log.info("(panel = fragmentos de archivos que ahora se gestionan desde el panel: la ingesta no los toca)")
     pool.close()
     return 1 if errors else 0
 

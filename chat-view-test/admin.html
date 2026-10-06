@@ -92,14 +92,39 @@
         </main>
       </div>
 
-      <!-- Archivos de la KB: qué tipos de cliente consulta cada uno -->
+      <!-- Base de conocimiento: subir, revisar, publicar y elegir qué tipos de cliente consultan cada archivo -->
       <main id="files" class="files" hidden>
         <div class="files-inner">
           <div class="files-head">
-            <h2>Archivos de la base de conocimiento</h2>
-            <p class="muted">Tildá qué tipos de cliente consultan cada archivo. Los cambios aplican al instante.
-              Soporte y ventas son bases separadas: la audiencia la define la carpeta.</p>
+            <h2>Base de conocimiento</h2>
+            <p class="muted">Todo lo que consulta el asistente. Tildá qué tipos de cliente consultan cada archivo: los
+              cambios aplican al instante. Soporte y ventas son bases separadas.</p>
           </div>
+
+          <form id="upForm" class="upload">
+            <label id="drop" class="drop">
+              <input id="upFile" type="file" accept=".pdf,.docx,.md" />
+              <span class="drop-icon" aria-hidden="true">⬆</span>
+              <span id="upName" class="drop-name">Elegí un archivo o arrastralo acá</span>
+              <small>PDF, Word (.docx) o Markdown · hasta 15 MB</small>
+            </label>
+            <div class="up-opts">
+              <label class="up-field">Es de
+                <select id="upAud">
+                  <option value="support">Soporte · técnico, para clientes</option>
+                  <option value="sales">Ventas · comercial, para prospectos</option>
+                </select>
+              </label>
+              <div class="up-field">Lo consultan <small class="muted">(se puede cambiar después)</small>
+                <div id="upTypes" class="doc-vis" role="group" aria-label="Tipos de cliente que lo consultan"></div>
+              </div>
+              <button id="upBtn" type="submit" disabled>Subir</button>
+            </div>
+            <p id="upNote" class="up-note muted">Si ya tiene buen formato se publica al instante. Si no, la IA arma un
+              borrador que alguien revisa antes de publicarlo.</p>
+          </form>
+          <input id="replaceFile" type="file" accept=".pdf,.docx,.md" hidden />
+
           <div class="files-filters">
             <input id="fq" type="search" placeholder="Buscar por título o ruta…" aria-label="Buscar archivos" />
             <label class="see">¿Qué ve…?
@@ -110,6 +135,34 @@
         </div>
       </main>
     </div>
+
+    <!-- Revisar / editar un documento -->
+    <dialog id="editor" class="editor" aria-labelledby="edTitle">
+      <div class="ed-head">
+        <div class="ed-titles">
+          <h3 id="edTitle"></h3>
+          <div id="edMeta" class="muted"></div>
+        </div>
+        <button type="button" class="ghost" data-ed="close">Cerrar</button>
+      </div>
+      <div class="ed-body">
+        <div id="edReview" class="ed-review"></div>
+        <div class="tabs ed-tabs" role="tablist">
+          <button type="button" data-tab="edit" class="on">Editar</button>
+          <button type="button" data-tab="preview">Vista previa</button>
+        </div>
+        <textarea id="edText" spellcheck="false" aria-label="Contenido en Markdown"></textarea>
+        <div id="edPreview" class="ed-preview" hidden></div>
+        <div id="edCheck" class="ed-check" aria-live="polite"></div>
+      </div>
+      <div class="ed-foot">
+        <button type="button" class="ghost danger" data-ed="discard">Descartar borrador</button>
+        <span class="spacer"></span>
+        <button type="button" class="ghost" data-ed="original">Ver original</button>
+        <button type="button" class="ghost" data-ed="save">Guardar borrador</button>
+        <button type="button" data-ed="publish">Publicar</button>
+      </div>
+    </dialog>
     <script type="module" src="/src/admin.js"></script>
   </body>
 </html>

@@ -13,13 +13,19 @@ Solo se reescribió el contenido que tenían los PDF, sin añadir nada. Faltan e
   **sin habilitar** hasta que alguien lo tilde en el panel. Después, la ingesta nunca pisa lo elegido.
 - Para compartir un archivo entre tipos **no lo copies**: dejá uno solo y tildá los tipos en el panel.
 
-## Cómo se preparan los archivos nuevos
-- Se puede mandar el original (PDF, Word o Google Docs exportado) sin darle formato. Si ya viene bien organizado
-  (títulos por tema, texto real), se usa tal cual. Si no, un asistente de IA lo reorganiza en un borrador: no
-  agrega ni cambia datos, y marca lo que no pudo leer.
-- Cada borrador lo revisa una persona contra el original antes de habilitarlo. Lo que salga de imágenes (tablas,
+## Cómo se cargan los archivos (actualizado 2026-10-06)
+- **Se suben desde el panel**: `/admin` → **Archivos** → recuadro "Elegí un archivo o arrastralo acá". Se
+  aceptan PDF, Word (.docx) y Markdown, de hasta 15 MB. Google Docs: descargalo como Word o PDF.
+- Al subirlo hay que indicar si es de **soporte** o de **ventas** (no se cambia después) y, si ya se sabe,
+  qué clientes lo consultan.
+- Si ya viene bien organizado (títulos por tema, texto real), **se publica al instante**. Si no, un asistente de
+  IA lo reorganiza en un **borrador**: no agrega ni cambia datos y marca lo que no pudo leer. El bot no lo usa
+  hasta que alguien lo revisa contra el original y toca **Publicar**. Lo que salga de imágenes (tablas,
   diagramas) hay que mirarlo con más cuidado.
-- Lo único que hay que indicar de cada archivo es si es de **soporte** o de **ventas**.
+- Para actualizar un documento: **Reemplazar archivo** en su fila (se conserva quién lo consulta). Para
+  corregir un detalle: **Ver y editar**.
+- Este archivo y las carpetas `soporte/` y `ventas/` del repositorio quedan como respaldo de la carga inicial: ya
+  no hace falta tocarlos.
 
 ## Contenido que está en imágenes y no se pudo leer
 1. **Manual operativo ECO360 – hotelería**, páginas 8 a 12 sin texto:

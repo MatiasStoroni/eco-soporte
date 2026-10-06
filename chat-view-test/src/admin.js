@@ -462,47 +462,77 @@ $('issues').addEventListener('change', (e) => {
   refresh()
 })
 
-// --- archivos: visibilidad por tipo de cliente -----------------------------------------------------------
+// --- base de conocimiento: archivos, visibilidad, subida y revisión ----------------------------------------
 
 const COMMON = 'common'
+const MAX_UPLOAD = 15 * 1024 * 1024
+const UPLOAD_EXT = ['.pdf', '.docx', '.md']
+const POLL_PROCESSING_MS = 3000
 const docKey = (d) => `${d.audience}|${d.source_id}`
+const findDoc = (key) => files?.documents.find((x) => docKey(x) === key)
 // Igual que el backend: "common" incluye a todos; el resto, sin duplicados y en orden estable.
 const normTypes = (types) => (types.includes(COMMON) ? [COMMON] : [...new Set(types)].sort())
 const sameTypes = (a, b) => normTypes(a).join() === normTypes(b).join()
 const typeLabel = (id) => files?.client_types.find((t) => t.id === id)?.label || id
+const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`
 
 function visibleFor(d, type) {
   return d.client_types.includes(type) || d.client_types.includes(COMMON)
+}
+
+// Casillas de tipos de cliente ("Todos (común)" deshabilita las individuales). Las usan las filas y la subida.
+function typeChips(selected) {
+  const all = selected.includes(COMMON)
+  return files.client_types
+    .map((t) => {
+      const isAll = t.id === COMMON
+      const checked = isAll ? all : all || selected.includes(t.id)
+      const disabled = !isAll && all
+      return `<label class="chip ${isAll ? 'all' : ''} ${checked ? 'on' : ''} ${disabled ? 'dis' : ''}">
+        <input type="checkbox" value="${esc(t.id)}" ${checked ? 'checked' : ''} ${disabled ? 'disabled' : ''} />${esc(isAll ? 'Todos (común)' : t.label)}</label>`
+    })
+    .join('')
+}
+
+// En qué está el documento: procesando, error, borrador para revisar o publicado.
+function docStatus(d) {
+  if (d.state === 'processing') return badge('Procesando…', 'proc', 'Se está leyendo el archivo (con IA si hace falta)')
+  if (d.state === 'error') return badge('Error', 'off', d.error || '')
+  const out = []
+  if (d.has_draft) {
+    const alerts = d.alerts ? ` · ${plural(d.alerts, 'alerta', 'alertas')}` : ''
+    out.push(badge(`Borrador para revisar${alerts}`, 'draft', 'El bot no lo usa hasta que se publique'))
+  }
+  if (d.chunks) out.push(badge(d.has_draft ? 'Publicada la versión anterior' : 'Publicado', 'pub'))
+  return out.join('')
 }
 
 function docRow(d) {
   const key = docKey(d)
   const draft = drafts.get(key) ?? d.client_types
   const dirty = !sameTypes(draft, d.client_types)
-  const all = draft.includes(COMMON)
   const off = !draft.length
-  const chips = files.client_types
-    .map((t) => {
-      const isAll = t.id === COMMON
-      const checked = isAll ? all : all || draft.includes(t.id)
-      const disabled = !isAll && all
-      return `<label class="chip ${isAll ? 'all' : ''} ${checked ? 'on' : ''} ${disabled ? 'dis' : ''}">
-        <input type="checkbox" value="${esc(t.id)}" ${checked ? 'checked' : ''} ${disabled ? 'disabled' : ''} />${esc(isAll ? 'Todos (común)' : t.label)}</label>`
-    })
-    .join('')
+  const busy = d.state === 'processing'
   const who = d.updated_by
     ? `Actualizado por ${esc(d.updated_by)} · ${esc(ago(d.updated_at))}`
-    : 'Visibilidad sugerida por la carpeta'
-  return `<div class="doc ${off ? 'off' : ''} ${dirty ? 'dirty' : ''}" data-key="${esc(key)}">
+    : d.origin === 'files' ? 'Cargado desde el repositorio' : ''
+  return `<div class="doc ${off ? 'off' : ''} ${dirty ? 'dirty' : ''} ${d.has_draft ? 'has-draft' : ''}" data-key="${esc(key)}">
     <div class="doc-info">
-      <div class="doc-title">${esc(d.title)}
-        ${off ? badge('Sin habilitar', 'off', 'Ningún cliente lo consulta: el bot no lo usa') : ''}
+      <div class="doc-title">${esc(d.title)} ${docStatus(d)}
+        ${off && d.chunks ? badge('Sin habilitar', 'off', 'Ningún cliente lo consulta: el bot no lo usa') : ''}
         ${dirty ? badge('Sin guardar', 'dirty') : ''}</div>
-      <div class="doc-path" title="${esc(d.source_id)}">${esc(d.source_id)}</div>
-      <div class="doc-meta">${d.product ? `${esc(d.product)} · ` : ''}${d.chunks} ${d.chunks === 1 ? 'fragmento' : 'fragmentos'} · ${who}</div>
+      <div class="doc-path" title="${esc(d.source_id)}">${esc(d.original_name || d.source_id)}</div>
+      ${d.state === 'error' ? `<div class="doc-error">${esc(d.error)}</div>` : ''}
+      <div class="doc-meta">${d.product ? `${esc(d.product)} · ` : ''}${plural(d.chunks, 'fragmento', 'fragmentos')}${who ? ` · ${who}` : ''}</div>
     </div>
-    <div class="doc-vis" role="group" aria-label="Tipos de cliente que consultan ${esc(d.title)}">${chips}</div>
+    <div class="doc-vis" role="group" aria-label="Tipos de cliente que consultan ${esc(d.title)}">${typeChips(draft)}</div>
     <button type="button" class="save" ${dirty ? '' : 'disabled'}>Guardar</button>
+    <div class="doc-actions">
+      <button type="button" class="link" data-act="edit" ${busy || d.state === 'error' ? 'disabled' : ''}>${d.has_draft ? 'Revisar borrador' : 'Ver y editar'}</button>
+      <button type="button" class="link" data-act="replace" ${busy ? 'disabled' : ''}>Reemplazar archivo</button>
+      ${d.has_original ? '<button type="button" class="link" data-act="original">Descargar original</button>' : ''}
+      <button type="button" class="link danger" data-act="delete" ${busy ? 'disabled' : ''}>Eliminar</button>
+    </div>
   </div>`
 }
 
@@ -512,18 +542,19 @@ function renderFiles() {
   const see = fileFilters.see
   const docs = files.documents.filter(
     (d) =>
-      (!q || `${d.title} ${d.source_id} ${d.product || ''}`.toLowerCase().includes(q)) && (!see || visibleFor(d, see)),
+      (!q || `${d.title} ${d.source_id} ${d.original_name || ''} ${d.product || ''}`.toLowerCase().includes(q)) &&
+      (!see || visibleFor(d, see)),
   )
   const html = Object.entries(FLOWS)
     .map(([aud, label]) => {
       const ds = docs.filter((d) => d.audience === aud)
       if (!ds.length) return ''
-      return `<section class="fgroup"><h3>${esc(label)} <span class="muted">${ds.length} ${ds.length === 1 ? 'archivo' : 'archivos'}</span></h3>${ds.map(docRow).join('')}</section>`
+      return `<section class="fgroup"><h3>${esc(label)} <span class="muted">${plural(ds.length, 'archivo', 'archivos')}</span></h3>${ds.map(docRow).join('')}</section>`
     })
     .join('')
   const empty = files.documents.length
     ? 'No hay archivos con estos filtros.'
-    : 'Todavía no hay archivos ingeridos. Cargalos en <code>docs/estructurados</code> (o Drive) y corré la ingesta.'
+    : 'Todavía no hay archivos. Subí el primero desde el recuadro de arriba.'
   $('fileList').innerHTML = html || `<div class="list-empty">${empty}</div>`
 }
 
@@ -531,17 +562,31 @@ const rowEl = (key) => $('fileList').querySelector(`.doc[data-key="${CSS.escape(
 
 // Redibuja una sola fila, conservando el foco del teclado en la casilla que se tocó.
 function updateRow(key, focusValue) {
-  const d = files.documents.find((x) => docKey(x) === key)
+  const d = findDoc(key)
   const el = rowEl(key)
   if (!d || !el) return
   el.outerHTML = docRow(d)
   if (focusValue) rowEl(key)?.querySelector(`input[value="${CSS.escape(focusValue)}"]`)?.focus()
 }
 
+// Mientras haya archivos procesándose, se consulta cada pocos segundos y se avisa cuando terminan.
+let filesTimer = null
+function announceChanges(before, after) {
+  for (const d of after) {
+    const prev = before.get(docKey(d))
+    if (prev?.state !== 'processing' || d.state === 'processing') continue
+    if (d.state === 'error') toast(`${d.title}: no se pudo procesar`, 'bad')
+    else if (d.has_draft) toast(`${d.title}: la IA armó un borrador, revisalo antes de publicarlo`, 'ok')
+    else toast(`${d.title}: publicado sin IA (ya tenía buen formato)`, 'ok')
+  }
+}
+
 async function loadFiles() {
+  clearTimeout(filesTimer)
   try {
+    const before = new Map((files?.documents || []).map((d) => [docKey(d), d]))
     files = await api('/documents')
-    for (const k of drafts.keys()) if (!files.documents.some((d) => docKey(d) === k)) drafts.delete(k)
+    for (const k of drafts.keys()) if (!findDoc(k)) drafts.delete(k)
     const sel = $('fsee')
     const keep = sel.value
     sel.innerHTML =
@@ -551,14 +596,21 @@ async function loadFiles() {
         .map((t) => `<option value="${esc(t.id)}">${esc(t.label)}</option>`)
         .join('')
     sel.value = keep
+    renderUploadTypes()
+    $('upNote').textContent = files.ai
+      ? 'Si ya tiene buen formato se publica al instante. Si no, la IA arma un borrador que alguien revisa antes de publicarlo.'
+      : 'Sin IA configurada (falta GOOGLE_API_KEY): solo se aceptan archivos que ya tengan buen formato.'
+    announceChanges(before, files.documents)
     renderFiles()
+    if (view === 'files' && files.documents.some((d) => d.state === 'processing'))
+      filesTimer = setTimeout(() => document.hidden || loadFiles(), POLL_PROCESSING_MS)
   } catch (e) {
     handleError(e)
   }
 }
 
 async function saveDoc(key) {
-  const d = files.documents.find((x) => docKey(x) === key)
+  const d = findDoc(key)
   const types = normTypes(drafts.get(key) ?? d.client_types)
   rowEl(key).querySelector('.save').disabled = true
   try {
@@ -577,12 +629,40 @@ async function saveDoc(key) {
   }
 }
 
+const docRef = (d) => ({ audience: d.audience, source_id: d.source_id, author })
+
+async function downloadOriginal(d) {
+  try {
+    const q = new URLSearchParams({ audience: d.audience, source_id: d.source_id })
+    const res = await fetch(`${API}/documents/original?${q}`, { headers: { Authorization: `Bearer ${token}` } })
+    if (res.status === 401) throw new AuthError('Contraseña incorrecta.')
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || `HTTP ${res.status}`)
+    const url = URL.createObjectURL(await res.blob())
+    const a = Object.assign(document.createElement('a'), { href: url, download: d.original_name || 'original' })
+    a.click()
+    setTimeout(() => URL.revokeObjectURL(url), 10000)
+  } catch (e) {
+    handleError(e)
+  }
+}
+
+async function deleteDoc(d) {
+  if (!confirm(`¿Eliminar «${d.title}»?\n\nEl asistente deja de consultarlo al instante. No se puede deshacer.`)) return
+  try {
+    await api('/documents/delete', { method: 'POST', body: docRef(d) })
+    toast(`${d.title}: eliminado`, 'ok')
+    loadFiles()
+  } catch (e) {
+    handleError(e)
+  }
+}
+
 $('fileList').addEventListener('change', (e) => {
   const input = e.target.closest('input[type="checkbox"]')
   const row = e.target.closest('.doc')
   if (!input || !row) return
   const key = row.dataset.key
-  const d = files.documents.find((x) => docKey(x) === key)
+  const d = findDoc(key)
   const draft = new Set(drafts.get(key) ?? d.client_types)
   input.checked ? draft.add(input.value) : draft.delete(input.value)
   const next = [...draft]
@@ -591,8 +671,19 @@ $('fileList').addEventListener('change', (e) => {
 })
 
 $('fileList').addEventListener('click', (e) => {
-  const btn = e.target.closest('button.save')
-  if (btn) saveDoc(btn.closest('.doc').dataset.key)
+  const btn = e.target.closest('button')
+  const row = btn?.closest('.doc')
+  if (!btn || !row || btn.disabled) return
+  const d = findDoc(row.dataset.key)
+  if (btn.classList.contains('save')) return saveDoc(row.dataset.key)
+  const act = btn.dataset.act
+  if (act === 'edit') openEditor(d)
+  else if (act === 'original') downloadOriginal(d)
+  else if (act === 'delete') deleteDoc(d)
+  else if (act === 'replace') {
+    replaceTarget = d
+    $('replaceFile').click()
+  }
 })
 
 let fqTimer
@@ -606,6 +697,273 @@ $('fq').addEventListener('input', (e) => {
 $('fsee').addEventListener('change', (e) => {
   fileFilters.see = e.target.value
   renderFiles()
+})
+
+// --- subir archivos ------------------------------------------------------------------------------------------
+
+let upFile = null
+let upTypes = []
+let replaceTarget = null
+
+function renderUploadTypes() {
+  if (files) $('upTypes').innerHTML = typeChips(upTypes)
+}
+
+function checkFile(file) {
+  const ext = file.name.slice(file.name.lastIndexOf('.')).toLowerCase()
+  if (!UPLOAD_EXT.includes(ext)) return `Formato no soportado: se aceptan ${UPLOAD_EXT.join(', ')}`
+  if (file.size > MAX_UPLOAD) return 'El archivo supera los 15 MB'
+  if (!file.size) return 'El archivo está vacío'
+  return ''
+}
+
+function pickFile(file) {
+  const err = file && checkFile(file)
+  if (err) {
+    toast(err, 'bad')
+    file = null
+  }
+  upFile = file || null
+  $('upName').textContent = upFile ? upFile.name : 'Elegí un archivo o arrastralo acá'
+  $('drop').classList.toggle('has-file', !!upFile)
+  $('upBtn').disabled = !upFile
+}
+
+const toBase64 = (file) =>
+  new Promise((resolve, reject) => {
+    const r = new FileReader()
+    r.onload = () => resolve(String(r.result).split(',', 2)[1] || '')
+    r.onerror = () => reject(new Error('No se pudo leer el archivo'))
+    r.readAsDataURL(file)
+  })
+
+async function uploadFile(file, { audience, client_types = [], source_id = null }) {
+  const body = { audience, filename: file.name, content_base64: await toBase64(file), client_types, source_id, author }
+  const doc = await api('/documents/upload', { method: 'POST', body })
+  toast(`${file.name}: subido, procesando…`, 'ok')
+  await loadFiles()
+  return doc
+}
+
+$('upFile').addEventListener('change', (e) => pickFile(e.target.files[0]))
+$('drop').addEventListener('dragover', (e) => {
+  e.preventDefault()
+  $('drop').classList.add('over')
+})
+$('drop').addEventListener('dragleave', () => $('drop').classList.remove('over'))
+$('drop').addEventListener('drop', (e) => {
+  e.preventDefault()
+  $('drop').classList.remove('over')
+  pickFile(e.dataTransfer.files[0])
+})
+$('upTypes').addEventListener('change', (e) => {
+  const input = e.target.closest('input[type="checkbox"]')
+  if (!input) return
+  const s = new Set(upTypes)
+  input.checked ? s.add(input.value) : s.delete(input.value)
+  upTypes = [...s]
+  renderUploadTypes()
+})
+$('upForm').addEventListener('submit', async (e) => {
+  e.preventDefault()
+  if (!upFile) return
+  $('upBtn').disabled = true
+  $('upBtn').textContent = 'Subiendo…'
+  try {
+    await uploadFile(upFile, { audience: $('upAud').value, client_types: normTypes(upTypes) })
+    $('upFile').value = ''
+    upTypes = []
+    renderUploadTypes()
+    pickFile(null)
+  } catch (err) {
+    handleError(err)
+    $('upBtn').disabled = false
+  } finally {
+    $('upBtn').textContent = 'Subir'
+  }
+})
+$('replaceFile').addEventListener('change', async (e) => {
+  const file = e.target.files[0]
+  const d = replaceTarget
+  e.target.value = ''
+  if (!file || !d) return
+  const err = checkFile(file)
+  if (err) return toast(err, 'bad')
+  if (!confirm(`¿Reemplazar «${d.title}» con «${file.name}»?\n\nSe conserva quién lo consulta. Si el archivo nuevo necesita IA, la versión actual sigue publicada hasta que publiques el borrador.`)) return
+  try {
+    await uploadFile(file, { audience: d.audience, source_id: d.source_id })
+  } catch (err2) {
+    handleError(err2)
+  }
+})
+
+// --- editor: revisar un borrador, editar y publicar ---------------------------------------------------------
+
+let editing = null // documento abierto en el editor (con markdown, borrador y revisión)
+let editorBase = '' // texto al abrir o al último guardado, para detectar cambios
+
+const editorDirty = () => editing && $('edText').value !== editorBase
+const splitFront = (md) => {
+  const m = /^---\n[\s\S]*?\n---\n?/.exec(md)
+  return m ? [m[0], md.slice(m[0].length)] : ['', md]
+}
+
+// Vista previa: secciones ## como títulos y tablas markdown como tablas; el resto, el markdown mínimo del chat.
+function docPreview(md) {
+  const [, body] = splitFront(md.replace(/\r\n/g, '\n'))
+  const out = []
+  let buf = []
+  let table = []
+  const flush = () => {
+    if (buf.length) out.push(renderMarkdown(buf.join('\n')))
+    buf = []
+  }
+  const flushTable = () => {
+    if (!table.length) return
+    const rows = table.filter((r) => !/^\|?[\s:|-]+\|?$/.test(r))
+    const cells = (r) => r.replace(/^\||\|$/g, '').split('|').map((c) => esc(c.trim()))
+    const [head, ...rest] = rows
+    out.push(`<table><thead><tr>${cells(head).map((c) => `<th>${c}</th>`).join('')}</tr></thead><tbody>${rest
+      .map((r) => `<tr>${cells(r).map((c) => `<td>${c}</td>`).join('')}</tr>`)
+      .join('')}</tbody></table>`)
+    table = []
+  }
+  for (const line of body.split('\n')) {
+    const h = /^(#{1,3})\s+(.*)/.exec(line)
+    if (line.trim().startsWith('|')) {
+      flush()
+      table.push(line.trim())
+    } else if (h) {
+      flush()
+      flushTable()
+      out.push(`<h${h[1].length + 2}>${esc(h[2])}</h${h[1].length + 2}>`)
+    } else {
+      flushTable()
+      buf.push(line)
+    }
+  }
+  flush()
+  flushTable()
+  return out.join('')
+}
+
+function reviewHtml(review) {
+  if (!review?.blocks?.length) return ''
+  const head = review.used_ai
+    ? review.alerts
+      ? `<b>La IA reorganizó el archivo. Hay ${plural(review.alerts, 'alerta', 'alertas')} para revisar.</b>`
+      : '<b>La IA reorganizó el archivo. No hay alertas automáticas, pero igual compará con el original.</b>'
+    : '<b>Avisos</b>'
+  return `<div class="rv-box ${review.alerts ? 'has-alerts' : ''}">${head}${review.blocks
+    .map((b) => `<div class="rv-block ${b.alert ? 'alert' : ''}"><div class="rv-title">${esc(b.title)}</div><ul>${b.items.map((i) => `<li>${esc(i)}</li>`).join('')}</ul></div>`)
+    .join('')}</div>`
+}
+
+function renderEditor() {
+  const d = editing
+  $('edTitle').textContent = d.title
+  const state = d.has_draft
+    ? 'Borrador: el asistente todavía no lo usa.'
+    : d.chunks
+      ? 'Versión publicada: al guardar se crea un borrador; el asistente sigue con esta hasta que publiques.'
+      : 'Sin publicar.'
+  $('edMeta').textContent = `${FLOWS[d.audience]} · ${d.original_name || d.source_id} · ${state}`
+  $('edReview').innerHTML = reviewHtml(d.has_draft ? d.review : null)
+  $('editor').querySelector('[data-ed="discard"]').hidden = !d.has_draft
+  $('editor').querySelector('[data-ed="original"]').hidden = !d.has_original
+  updateEditorButtons()
+}
+
+function updateEditorButtons() {
+  const dirty = editorDirty()
+  $('editor').querySelector('[data-ed="save"]').disabled = !dirty
+  $('editor').querySelector('[data-ed="publish"]').disabled = !dirty && !editing.has_draft
+}
+
+function setEditorTab(tab) {
+  for (const b of $('editor').querySelectorAll('[data-tab]')) b.classList.toggle('on', b.dataset.tab === tab)
+  $('edText').hidden = tab !== 'edit'
+  $('edPreview').hidden = tab !== 'preview'
+  if (tab === 'preview') $('edPreview').innerHTML = docPreview($('edText').value)
+}
+
+async function openEditor(d) {
+  try {
+    editing = await api(`/documents/detail?${new URLSearchParams({ audience: d.audience, source_id: d.source_id })}`)
+    const text = editing.draft_markdown ?? editing.markdown
+    if (text == null) return toast('Este documento todavía no tiene el texto guardado: volvé a ingerirlo o reemplazá el archivo.', 'bad')
+    editorBase = text.replace(/\r\n/g, '\n')
+    $('edText').value = editorBase
+    $('edCheck').innerHTML = ''
+    setEditorTab('edit')
+    renderEditor()
+    $('editor').showModal()
+  } catch (e) {
+    handleError(e)
+  }
+}
+
+function closeEditor(force = false) {
+  if (!force && editorDirty() && !confirm('Hay cambios sin guardar. ¿Cerrar igual?')) return
+  editing = null
+  $('editor').close()
+}
+
+function showCheck(check) {
+  const items = [...(check?.problems || []).map((p) => ['bad', p]), ...(check?.warnings || []).map((w) => ['', w])]
+  $('edCheck').innerHTML = items.length
+    ? `<ul>${items.map(([c, t]) => `<li class="${c}">${esc(t)}</li>`).join('')}</ul>`
+    : '<span class="ok">Formato correcto.</span>'
+}
+
+async function saveEditor() {
+  const out = await api('/documents/draft', { method: 'PUT', body: { ...docRef(editing), markdown: $('edText').value } })
+  editing = { ...editing, ...out.document }
+  editorBase = $('edText').value
+  showCheck(out.format)
+  renderEditor()
+  return out
+}
+
+$('editor').addEventListener('click', async (e) => {
+  const btn = e.target.closest('button')
+  if (!btn || !editing) return
+  if (btn.dataset.tab) return setEditorTab(btn.dataset.tab)
+  const act = btn.dataset.ed
+  try {
+    if (act === 'close') closeEditor()
+    else if (act === 'original') downloadOriginal(editing)
+    else if (act === 'save') {
+      await saveEditor()
+      toast('Borrador guardado: el asistente sigue usando la versión publicada', 'ok')
+      loadFiles()
+    } else if (act === 'publish') {
+      if (editorDirty()) await saveEditor()
+      const alerts = editing.review?.alerts || 0
+      if (alerts && !confirm(`El borrador tiene ${plural(alerts, 'alerta', 'alertas')} de la revisión automática. ¿Ya lo comparaste con el original y querés publicarlo?`)) return
+      btn.disabled = true
+      const out = await api('/documents/publish', { method: 'POST', body: docRef(editing) })
+      const vis = out.client_types.length ? '' : ' Todavía no lo consulta ningún cliente: tildalos en la lista.'
+      toast(`${out.title}: publicado (${plural(out.chunks, 'fragmento', 'fragmentos')}).${vis}`, 'ok')
+      closeEditor(true)
+      loadFiles()
+    } else if (act === 'discard') {
+      const never = !editing.chunks
+      if (!confirm(never ? '¿Descartar el borrador? Como nunca se publicó, se elimina el documento.' : '¿Descartar el borrador? Se mantiene la versión publicada.')) return
+      await api('/documents/discard-draft', { method: 'POST', body: docRef(editing) })
+      toast(never ? 'Borrador descartado y documento eliminado' : 'Borrador descartado', 'ok')
+      closeEditor(true)
+      loadFiles()
+    }
+  } catch (err) {
+    handleError(err)
+    if (editing) updateEditorButtons()
+  }
+})
+$('edText').addEventListener('input', updateEditorButtons)
+$('editor').addEventListener('cancel', (e) => {
+  e.preventDefault() // Escape: pasa por el aviso de cambios sin guardar
+  closeEditor()
 })
 
 // --- vistas: conversaciones | archivos (#archivos) -------------------------------------------------------
