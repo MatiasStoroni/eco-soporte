@@ -59,10 +59,39 @@ uv run pytest -m integration     # requiere Docker. OJO: vacía kb_chunks (usa e
 
 ## Base de conocimiento local (`kb/`, desarrollo)
 
-`kb/<audience>/<client_type|_common>/*.md`, con frontmatter `title`, `doc_type`, `product`, `language`.
-`audience` (`support`/`sales`) y `client_types` se **derivan de la ruta**; si el frontmatter intenta
-definirlos, el documento se rechaza. `_common` → `['common']`. Los documentos actuales son sintéticos.
-La ingesta solo re-embebe lo nuevo o modificado (`content_hash`) y borra los chunks huérfanos.
+`<kb>/<audience>/<carpeta>/*.md`, con frontmatter `title`, `doc_type`, `product`, `language` (la KB real está en
+`docs/estructurados`; `kb/` tiene documentos sintéticos de ejemplo). `audience` (`support`/`sales`) se **deriva de
+la ruta**. Los `client_types` (qué tipos de cliente consultan el archivo) se gestionan en el panel
+(`/admin` → **Archivos**) y se guardan en la tabla `kb_documents`; la subcarpeta es solo la sugerencia inicial de
+un archivo nuevo (`hotel/` → hotel, `_common`/`comun` → `['common']`, otra → sin habilitar). Si el frontmatter
+intenta definir `audience` o `client_types`, el documento se rechaza.
+
+La ingesta solo embebe contenido nuevo: el `content_hash` es solo del contenido, así que mover, duplicar o cambiar
+la visibilidad de un archivo reutiliza el embedding guardado. Borra los chunks huérfanos. Imprime por audiencia
+`embedded` (lo único que gasta cuota), `reused`, `meta_only`, `unchanged` y `deleted`.
+
+Además del filtro del código, la base aplica **RLS** por tipo de cliente en cada partición: los roles de solo
+lectura solo ven las filas de los tipos que fija `app.client_types` en la transacción (sin la variable, nada). La
+crea la migración de `src/eco_kb/kb_documents.py`, que corre sola al arrancar la API y en cada ingesta.
+
+## Preparar documentos nuevos (IA solo si hace falta)
+
+Cuando llega un PDF o Word sin el formato que necesita el RAG:
+
+```bash
+python -m uv run python -m eco_kb.ingest.restructure "ruta/al/archivo.pdf" --audiencia soporte
+```
+
+- **Si el archivo ya tiene buen formato** (título, una sección `##` por tema, secciones de tamaño razonable, texto
+  limpio), se usa **tal cual, sin IA**.
+- **Si ya se procesó** y la fuente no cambió, no hace nada.
+- **Si no tiene buen formato**, Gemini lo reorganiza (también lee las páginas que son imágenes) y otra llamada lo
+  verifica contra el original. Deja `docs/estructurados/<audiencia>/borradores/<nombre>.md` y un
+  `<nombre>.revision.txt` con lo que hay que revisar: cifras agregadas o perdidas, observaciones del verificador,
+  secciones que salen de imágenes y pendientes.
+- Los borradores entran a la KB **sin habilitar**. Se revisan contra el original y se publican tildándolos en el
+  panel (Archivos). Un borrador editado a mano nunca se pisa (salvo con `--forzar`).
+- `--solo-validar` revisa una carpeta sin escribir nada ni usar IA. El detalle está en `AGENTS.md` §8.5.
 
 ## Google Drive como fuente de la KB
 
@@ -77,8 +106,10 @@ Los operadores suben archivos a una carpeta de Drive y un proceso de sincronizac
 ```
 
 Formatos: Google Docs, `.md`, `.pdf` (con texto, no escaneado) y `.docx`. El frontmatter es opcional
-(título = nombre del archivo). Audiencia y `client_type` salen **siempre de las carpetas**. Archivos en una
-ruta inválida, de un tipo no soportado o con un `client_type` desconocido se omiten y se informan en el log.
+(título = nombre del archivo). La audiencia sale **siempre de la carpeta** de primer nivel. La de segundo nivel
+solo sugiere la visibilidad de un archivo nuevo (una carpeta que no es un tipo de cliente lo deja sin habilitar);
+después se gestiona en el panel (`/admin` → Archivos). Archivos en una ruta inválida o de un formato no soportado
+se omiten y se informan en el log.
 
 **Puesta en marcha (una vez)**
 1. Google Cloud: crear proyecto, habilitar *Google Drive API*, configurar la pantalla de consentimiento y
@@ -151,6 +182,16 @@ la conversación a mano.
   - Responder desde la caja de abajo: si la conversación no estaba tomada, la toma sola.
   - *Devolver al bot* o *Descartar* (en una derivación pendiente) la devuelve al bot.
   - El cliente ve los mensajes del equipo en el chat sin recargar.
+- **Archivos** (botón del header, o `/admin#archivos`): qué tipos de cliente consultan cada documento de la KB.
+  - Lista agrupada en Soporte / Ventas, con título, ruta, producto y cantidad de fragmentos.
+  - Casillas **Todos (común)**, Hotel, Bodega, Restaurante, Genérico y **Guardar** por fila. Sin ninguna tildada,
+    el archivo queda **Sin habilitar** (el bot no lo consulta).
+  - Los cambios aplican al instante, sin re-ingestar ni redeployar. Soporte y ventas son bases separadas: la
+    audiencia la define la carpeta y no se cambia desde acá.
+  - Filtros: búsqueda por título o ruta, y **¿Qué ve…? [tipo]** para revisar de un vistazo qué consulta, por
+    ejemplo, un cliente de bodega.
+  - Los archivos se siguen cargando por repo o Drive + ingesta; un archivo nuevo arranca con la visibilidad que
+    sugiere su carpeta.
 
 ### Cómo está implementado
 
@@ -226,6 +267,7 @@ tocar el proxy de Vite ni el contenedor, y se recupera solo si la API se reinici
 | `src/eco_kb/conversations.py` | Esquema y `ConversationStore` |
 | `src/eco_kb/api/main.py` | Registro en `/chat`, `_handoff` y `/chat/{id}/updates` |
 | `src/eco_kb/api/admin.py` | Endpoints del panel |
+| `src/eco_kb/kb_documents.py` | Manifiesto `kb_documents`, migración (RLS, hash) y `DocumentStore` (vista Archivos) |
 | `src/eco_kb/graph/nodes/handoff.py` | `handoff_gate` y `handoff_response` |
 | `src/eco_kb/graph/nodes/redirects.py` | `purchase_response` |
 | `config/handoff.yaml` | Configuración de la derivación |
@@ -244,12 +286,16 @@ tocar el proxy de Vite ni el contenedor, y se recupera solo si la API se reinici
 | `POST /admin/conversations/{id}/status` `{status: "human" \| "bot", author}` | Tomar / devolver o descartar |
 | `POST /admin/conversations/{id}/messages` `{content, author}` | Responder (toma la conversación si hace falta) |
 | `PUT /admin/messages/{id}/review` `{rating: "good" \| "bad" \| null, note, author}` | Revisar una respuesta |
+| `GET /admin/documents` | Archivos de la KB con su visibilidad, más los tipos de cliente (`clients.yaml` + `common`) |
+| `PUT /admin/documents/visibility` `{audience, source_id, client_types, author}` | Cambiar qué tipos consultan un archivo (422 si un tipo no existe) |
 | `GET /chat/{id}/updates?after=<id>` (sin contraseña) | Polling del chat |
 
 **Tests**: `tests/unit/test_handoff_gate.py` (patrones), `tests/e2e/test_graph_fakes.py` (derivación sin LLM y
-seguridad primero), `tests/e2e/test_api_fakes.py` (contraseña) y
+seguridad primero), `tests/e2e/test_api_fakes.py` (contraseña y vista Archivos con un store falso) y
 `tests/integration/test_conversations_pg.py` (ciclo completo contra Postgres:
 `python -m uv run python -m pytest -m integration tests/integration/test_conversations_pg.py`).
+`tests/integration/test_kb_documents_pg.py` cubre la visibilidad, la reutilización de embeddings y la migración
+(⚠️ vacía `kb_chunks` y `kb_documents`).
 
 **Limitaciones conocidas**:
 
@@ -267,6 +313,8 @@ usar `TRUNCATE`, que conserva la KB; `docker compose down -v` borra **todo**, in
 
 - Tabla `kb_chunks` particionada `LIST (audience)`; cada store consulta directamente su partición.
 - Roles `rag_support_ro` / `rag_sales_ro` (solo `SELECT` en su partición) con pool propio.
+- **RLS** en cada partición: el rol RO solo ve filas con `client_types && app.client_types`, que el store fija en
+  la transacción con `set_config(..., true)`. Sin la variable, 0 filas.
 - Filtro tipado `RetrievalFilter` → `WHERE` parametrizado; assert post-recuperación descarta y registra violaciones.
 - Contraseñas de `sql/001_init.sql` son de desarrollo: cámbialas en producción.
 
@@ -274,7 +322,9 @@ usar `TRUNCATE`, que conserva la KB; `docker compose down -v` borra **todo**, in
 
 1. Añadirlo al `Literal` `ClientType` en `src/eco_kb/graph/state.py`.
 2. Bloque nuevo en `config/clients.yaml` (tono, `cta`, `fallback`); sin él la app no arranca.
-3. Carpetas `kb/support/<ct>/` y `kb/sales/<ct>/` con sus documentos y relanzar la ingesta.
+3. Tildarlo en el panel (Archivos) en los documentos que deba consultar. Opcional: carpetas
+   `soporte/<ct>/` y `ventas/<ct>/` para que los archivos nuevos lo traigan como sugerencia.
+4. Su etiqueta en `LABELS` de `src/eco_kb/kb_documents.py`.
 
 ## API
 

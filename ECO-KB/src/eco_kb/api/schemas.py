@@ -46,3 +46,11 @@ class Review(BaseModel):
     rating: Literal["good", "bad"] | None
     note: str | None = Field(default=None, max_length=2000)
     author: str | None = Field(default=None, max_length=80)
+
+
+class DocumentVisibility(BaseModel):
+    """Qué tipos de cliente consultan un archivo. El source_id va en el body porque tiene barras."""
+    audience: Literal["support", "sales"]
+    source_id: str = Field(min_length=1, max_length=500)
+    client_types: list[str] = Field(max_length=20)  # [] = sin habilitar; ["common"] = todos
+    author: str | None = Field(default=None, max_length=80)

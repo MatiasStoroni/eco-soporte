@@ -4,7 +4,9 @@
     uv run python -m eco_kb.drive.sync --loop [--interval-minutes 15]
 
 Cada pasada lista el árbol completo (barato) y solo descarga/embebe lo nuevo o modificado.
-Estructura esperada en Drive: <raíz>/<soporte|ventas>/<hotel|bodega|...|comun>/<archivo>
+Estructura esperada en Drive: <raíz>/<soporte|ventas>/<carpeta>/<archivo>. La audiencia sale de la carpeta de
+primer nivel. La de segundo nivel es solo la visibilidad SUGERIDA para un archivo nuevo (`hotel` → Hotel,
+`comun` → todos, cualquier otra → sin habilitar); después manda lo que se elija en el panel (/admin → Archivos).
 """
 import argparse
 import logging
@@ -80,7 +82,7 @@ def _sync(client, root_id, pool, embedder, valid_client_types, force) -> SyncRep
     for f in files:
         path = source_path(f.parts, f.name)
         if path is None:
-            rep.skipped.append(f"{'/'.join((*f.parts, f.name))}: ruta inválida (esperado soporte|ventas/<tipo>/archivo)")
+            rep.skipped.append(f"{'/'.join((*f.parts, f.name))}: ruta inválida (esperado soporte|ventas/<carpeta>/archivo)")
             continue
         if not is_supported(f.name, f.mime):
             rep.skipped.append(f"{path}: formato no soportado ({f.mime})")

@@ -10,6 +10,7 @@ from eco_kb.config import load_config
 from eco_kb.db import make_pool
 from eco_kb.ingest.loader import load_kb
 from eco_kb.ingest.run import ingest
+from eco_kb.kb_documents import setup
 from eco_kb.retrieval.filters import build_filter
 from eco_kb.retrieval.store import PgChunkStore
 from eco_kb.settings import get_settings
@@ -42,8 +43,11 @@ def env():
     records, errors = load_kb(Path(s.kb_dir), set(cfg.clients))
     assert not errors
     emb = HashEmbedder()
-    # OJO: estos tests usan embeddings falsos y vacían kb_chunks; tras ejecutarlos, relanza la ingesta real.
-    admin.connection().__enter__().execute("TRUNCATE kb_chunks")
+    # OJO: estos tests usan embeddings falsos y vacían kb_chunks y kb_documents (la visibilidad elegida en el
+    # panel se pierde); tras ejecutarlos, relanza la ingesta real y revisá el panel.
+    setup(admin)
+    with admin.connection() as conn:
+        conn.execute("TRUNCATE kb_chunks, kb_documents")
     ingest(records, admin, emb)
     stores = {
         "support": PgChunkStore("support", make_pool(s.database_url_support_ro, "t_sup", 2)),
@@ -51,7 +55,7 @@ def env():
     }
     yield s, emb, stores
     with admin.connection() as conn:
-        conn.execute("TRUNCATE kb_chunks")
+        conn.execute("TRUNCATE kb_chunks, kb_documents")
     admin.close()
 
 
@@ -107,7 +111,35 @@ def test_ingest_idempotent(env):
     pool = make_pool(s.database_url_admin, "t_admin2", 2)
     stats = ingest(records, pool, emb)
     pool.close()
-    assert sum(stats["inserted"].values()) == 0 and sum(stats["updated"].values()) == 0
+    assert sum(stats["unchanged"].values()) == len(records)
+    assert not any(sum(stats[k].values()) for k in ("embedded", "reused", "meta_only", "deleted"))
+
+
+def test_rls_without_client_types_sees_nothing(env):
+    s, _, _ = env
+    with psycopg.connect(s.database_url_support_ro) as conn:
+        assert conn.execute("SELECT count(*) FROM kb_chunks_support").fetchone()[0] == 0
+
+
+def test_rls_filters_even_without_where(env):
+    """Aunque el código se olvide del WHERE, la base solo devuelve los tipos de la variable de sesión."""
+    s, _, _ = env
+    with psycopg.connect(s.database_url_admin) as conn:
+        total = conn.execute("SELECT count(*) FROM kb_chunks_support").fetchone()[0]
+        bodega = conn.execute("SELECT count(*) FROM kb_chunks_support WHERE 'bodega' = ANY(client_types)").fetchone()[0]
+    assert bodega, "la KB de prueba tiene que tener fragmentos de bodega"
+    with psycopg.connect(s.database_url_support_ro) as conn, conn.transaction():
+        conn.execute("SELECT set_config('app.client_types', 'hotel,common', true)")
+        rows = conn.execute("SELECT client_types FROM kb_chunks_support").fetchall()
+    assert rows and len(rows) < total
+    assert all(set(ct) & {"hotel", "common"} and "bodega" not in ct for (ct,) in rows)
+
+
+def test_ro_roles_cannot_read_manifest(env):
+    s, _, _ = env
+    with psycopg.connect(s.database_url_support_ro) as conn:
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            conn.execute("SELECT 1 FROM kb_documents LIMIT 1")
 
 
 def test_checkpointer_two_turns_same_thread(env, make_services):

@@ -1,4 +1,8 @@
-"""Recorre kb/<audience>/<client_type|_common>/*.md. audience y client_types salen de la RUTA."""
+"""Recorre <kb>/<audience>/<carpeta>/*.md. La audiencia sale de la RUTA, nunca del contenido.
+
+Los client_types que devuelve son solo la SUGERENCIA de la carpeta para un archivo nuevo (`hotel/` → hotel,
+`comun/` → common, cualquier otra → [] = sin habilitar). La visibilidad vigente vive en `kb_documents`, la edita el
+panel y la ingesta la aplica a los fragmentos (ver eco_kb.kb_documents)."""
 import hashlib
 from pathlib import Path
 from typing import Literal
@@ -41,7 +45,7 @@ class ChunkRecord(BaseModel):
     title: str = Field(min_length=1)
     section_path: str
     content: str = Field(min_length=1)
-    client_types: list[str] = Field(min_length=1)
+    client_types: list[str]  # [] = sin habilitar
     doc_type: str = Field(min_length=1)
     product: str
     language: str
@@ -49,8 +53,10 @@ class ChunkRecord(BaseModel):
     content_hash: str
 
     @staticmethod
-    def make_hash(content: str, meta: tuple) -> str:
-        return hashlib.sha256(("|".join(map(str, meta)) + "\n" + content).encode()).hexdigest()
+    def make_hash(content: str) -> str:
+        """Solo el contenido (que ya incluye el encabezado `Título > Sección`): mover un archivo, duplicarlo o
+        cambiarle la visibilidad no obliga a re-embeber. Igual a `sha256(convert_to(content, 'UTF8'))` en SQL."""
+        return hashlib.sha256(content.encode("utf-8")).hexdigest()
 
 
 def parse_markdown(text: str) -> tuple[dict, str]:
@@ -67,16 +73,16 @@ def parse_markdown(text: str) -> tuple[dict, str]:
 
 
 def derive_from_path(rel: Path, valid_client_types: set[str]) -> tuple[str, list[str]]:
-    """rel = <audience>/<client_type|_common>/<file>.md"""
+    """rel = <audience>/<carpeta>/<file>.md → (audience, client_types sugeridos por la carpeta)."""
     if len(rel.parts) != 3:
-        raise IngestError(f"ruta inválida (esperado audience/client_type/archivo.md): {rel}")
+        raise IngestError(f"ruta inválida (esperado audience/carpeta/archivo.md): {rel}")
     audience, ct = normalize_part(rel.parts[0]), normalize_part(rel.parts[1])
     if audience not in AUDIENCES:
         raise IngestError(f"audience desconocida en la ruta: {audience}")
     if ct == "_common":
         return audience, ["common"]
     if ct not in valid_client_types:
-        raise IngestError(f"client_type desconocido en la ruta: {ct}")
+        return audience, []  # carpeta que no es un tipo de cliente (p. ej. equipos/): arranca sin habilitar
     return audience, [ct]
 
 
@@ -85,12 +91,13 @@ def load_file(path: Path, kb_dir: Path, valid_client_types: set[str]) -> list[Ch
 
 
 def load_text(rel: Path, text: str, valid_client_types: set[str]) -> list[ChunkRecord]:
-    """rel = <audience>/<client_type|_common>/<nombre>; text = markdown (con o sin frontmatter)."""
+    """rel = <audience>/<carpeta>/<nombre>; text = markdown (con o sin frontmatter)."""
     audience, client_types = derive_from_path(rel, valid_client_types)
     raw, body = parse_markdown(text)
     bad = FORBIDDEN_FRONTMATTER & set(raw)
-    if bad:
-        raise IngestError(f"{rel}: el frontmatter no puede definir {sorted(bad)} (se derivan de la ruta)")
+    if bad:  # el contenido nunca decide su visibilidad
+        raise IngestError(f"{rel}: el frontmatter no puede definir {sorted(bad)} "
+                          "(la audiencia sale de la ruta; la visibilidad, del panel)")
     try:
         fm = FrontMatter(**{"title": rel.stem, "doc_type": "documento", **raw})
     except ValidationError as exc:
@@ -99,11 +106,10 @@ def load_text(rel: Path, text: str, valid_client_types: set[str]) -> list[ChunkR
     source_id = rel.as_posix()
     records = []
     for i, (section, content) in enumerate(chunk_document(fm.title, body)):
-        meta = (audience, tuple(client_types), fm.title, section, fm.doc_type, fm.product, fm.language)
         records.append(ChunkRecord(
             chunk_id=f"{source_id}#{i}", audience=audience, source_id=source_id, title=fm.title,
             section_path=section, content=content, client_types=client_types, doc_type=fm.doc_type,
-            product=fm.product, language=fm.language, content_hash=ChunkRecord.make_hash(content, meta),
+            product=fm.product, language=fm.language, content_hash=ChunkRecord.make_hash(content),
         ))
     return records
 

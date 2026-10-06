@@ -42,6 +42,11 @@ let currentSig = ''
 let listSig = ''
 let timer = null
 const filters = { status: '', flow: '', client_type: '', q: '', issues: false }
+let view = 'conv' // conv | files
+let files = null // {client_types: [{id, label}], documents: [...]} de /documents
+const drafts = new Map() // archivo -> client_types tildados sin guardar
+const fileFilters = { q: '', see: '' }
+const FILES_HASH = 'archivos'
 
 // --- API -------------------------------------------------------------------------------------------------
 
@@ -457,6 +462,171 @@ $('issues').addEventListener('change', (e) => {
   refresh()
 })
 
+// --- archivos: visibilidad por tipo de cliente -----------------------------------------------------------
+
+const COMMON = 'common'
+const docKey = (d) => `${d.audience}|${d.source_id}`
+// Igual que el backend: "common" incluye a todos; el resto, sin duplicados y en orden estable.
+const normTypes = (types) => (types.includes(COMMON) ? [COMMON] : [...new Set(types)].sort())
+const sameTypes = (a, b) => normTypes(a).join() === normTypes(b).join()
+const typeLabel = (id) => files?.client_types.find((t) => t.id === id)?.label || id
+
+function visibleFor(d, type) {
+  return d.client_types.includes(type) || d.client_types.includes(COMMON)
+}
+
+function docRow(d) {
+  const key = docKey(d)
+  const draft = drafts.get(key) ?? d.client_types
+  const dirty = !sameTypes(draft, d.client_types)
+  const all = draft.includes(COMMON)
+  const off = !draft.length
+  const chips = files.client_types
+    .map((t) => {
+      const isAll = t.id === COMMON
+      const checked = isAll ? all : all || draft.includes(t.id)
+      const disabled = !isAll && all
+      return `<label class="chip ${isAll ? 'all' : ''} ${checked ? 'on' : ''} ${disabled ? 'dis' : ''}">
+        <input type="checkbox" value="${esc(t.id)}" ${checked ? 'checked' : ''} ${disabled ? 'disabled' : ''} />${esc(isAll ? 'Todos (común)' : t.label)}</label>`
+    })
+    .join('')
+  const who = d.updated_by
+    ? `Actualizado por ${esc(d.updated_by)} · ${esc(ago(d.updated_at))}`
+    : 'Visibilidad sugerida por la carpeta'
+  return `<div class="doc ${off ? 'off' : ''} ${dirty ? 'dirty' : ''}" data-key="${esc(key)}">
+    <div class="doc-info">
+      <div class="doc-title">${esc(d.title)}
+        ${off ? badge('Sin habilitar', 'off', 'Ningún cliente lo consulta: el bot no lo usa') : ''}
+        ${dirty ? badge('Sin guardar', 'dirty') : ''}</div>
+      <div class="doc-path" title="${esc(d.source_id)}">${esc(d.source_id)}</div>
+      <div class="doc-meta">${d.product ? `${esc(d.product)} · ` : ''}${d.chunks} ${d.chunks === 1 ? 'fragmento' : 'fragmentos'} · ${who}</div>
+    </div>
+    <div class="doc-vis" role="group" aria-label="Tipos de cliente que consultan ${esc(d.title)}">${chips}</div>
+    <button type="button" class="save" ${dirty ? '' : 'disabled'}>Guardar</button>
+  </div>`
+}
+
+function renderFiles() {
+  if (!files) return
+  const q = fileFilters.q.toLowerCase()
+  const see = fileFilters.see
+  const docs = files.documents.filter(
+    (d) =>
+      (!q || `${d.title} ${d.source_id} ${d.product || ''}`.toLowerCase().includes(q)) && (!see || visibleFor(d, see)),
+  )
+  const html = Object.entries(FLOWS)
+    .map(([aud, label]) => {
+      const ds = docs.filter((d) => d.audience === aud)
+      if (!ds.length) return ''
+      return `<section class="fgroup"><h3>${esc(label)} <span class="muted">${ds.length} ${ds.length === 1 ? 'archivo' : 'archivos'}</span></h3>${ds.map(docRow).join('')}</section>`
+    })
+    .join('')
+  const empty = files.documents.length
+    ? 'No hay archivos con estos filtros.'
+    : 'Todavía no hay archivos ingeridos. Cargalos en <code>docs/estructurados</code> (o Drive) y corré la ingesta.'
+  $('fileList').innerHTML = html || `<div class="list-empty">${empty}</div>`
+}
+
+const rowEl = (key) => $('fileList').querySelector(`.doc[data-key="${CSS.escape(key)}"]`)
+
+// Redibuja una sola fila, conservando el foco del teclado en la casilla que se tocó.
+function updateRow(key, focusValue) {
+  const d = files.documents.find((x) => docKey(x) === key)
+  const el = rowEl(key)
+  if (!d || !el) return
+  el.outerHTML = docRow(d)
+  if (focusValue) rowEl(key)?.querySelector(`input[value="${CSS.escape(focusValue)}"]`)?.focus()
+}
+
+async function loadFiles() {
+  try {
+    files = await api('/documents')
+    for (const k of drafts.keys()) if (!files.documents.some((d) => docKey(d) === k)) drafts.delete(k)
+    const sel = $('fsee')
+    const keep = sel.value
+    sel.innerHTML =
+      '<option value="">Cualquier tipo</option>' +
+      files.client_types
+        .filter((t) => t.id !== COMMON)
+        .map((t) => `<option value="${esc(t.id)}">${esc(t.label)}</option>`)
+        .join('')
+    sel.value = keep
+    renderFiles()
+  } catch (e) {
+    handleError(e)
+  }
+}
+
+async function saveDoc(key) {
+  const d = files.documents.find((x) => docKey(x) === key)
+  const types = normTypes(drafts.get(key) ?? d.client_types)
+  rowEl(key).querySelector('.save').disabled = true
+  try {
+    const out = await api('/documents/visibility', {
+      method: 'PUT',
+      body: { audience: d.audience, source_id: d.source_id, client_types: types, author },
+    })
+    Object.assign(d, out)
+    drafts.delete(key)
+    updateRow(key)
+    const who = types.includes(COMMON) ? 'todos los tipos' : types.map(typeLabel).join(', ')
+    toast(types.length ? `${d.title}: lo consultan ${who}` : `${d.title}: quedó sin habilitar`, 'ok')
+  } catch (e) {
+    updateRow(key)
+    handleError(e)
+  }
+}
+
+$('fileList').addEventListener('change', (e) => {
+  const input = e.target.closest('input[type="checkbox"]')
+  const row = e.target.closest('.doc')
+  if (!input || !row) return
+  const key = row.dataset.key
+  const d = files.documents.find((x) => docKey(x) === key)
+  const draft = new Set(drafts.get(key) ?? d.client_types)
+  input.checked ? draft.add(input.value) : draft.delete(input.value)
+  const next = [...draft]
+  sameTypes(next, d.client_types) ? drafts.delete(key) : drafts.set(key, next)
+  updateRow(key, input.value)
+})
+
+$('fileList').addEventListener('click', (e) => {
+  const btn = e.target.closest('button.save')
+  if (btn) saveDoc(btn.closest('.doc').dataset.key)
+})
+
+let fqTimer
+$('fq').addEventListener('input', (e) => {
+  clearTimeout(fqTimer)
+  fqTimer = setTimeout(() => {
+    fileFilters.q = e.target.value.trim()
+    renderFiles()
+  }, 150)
+})
+$('fsee').addEventListener('change', (e) => {
+  fileFilters.see = e.target.value
+  renderFiles()
+})
+
+// --- vistas: conversaciones | archivos (#archivos) -------------------------------------------------------
+
+function showView(v) {
+  view = v
+  for (const b of $('views').children) b.classList.toggle('on', b.dataset.view === v)
+  document.querySelector('.body').hidden = v !== 'conv'
+  $('stats').hidden = v !== 'conv'
+  $('files').hidden = v !== 'files'
+  if (v === 'files') loadFiles()
+  else refresh() // al volver, ponerse al día (en Archivos el refresco de conversaciones queda en pausa)
+}
+
+$('views').addEventListener('click', (e) => {
+  const b = e.target.closest('button')
+  if (!b || b.dataset.view === view) return
+  // El hash manda: hashchange cambia la vista (y el botón Atrás del navegador funciona).
+  location.hash = b.dataset.view === 'files' ? FILES_HASH : current?.session_id || ''
+})
+
 // --- acceso ----------------------------------------------------------------------------------------------
 
 function logout(msg) {
@@ -475,11 +645,14 @@ async function start() {
   $('me').textContent = author
   current = null
   listSig = currentSig = ''
-  await refresh()
   const id = decodeURIComponent(location.hash.slice(1))
-  if (id) openConversation(id, { force: true })
+  if (id === FILES_HASH) showView('files')
+  else {
+    showView('conv')
+    if (id) openConversation(id, { force: true })
+  }
   clearInterval(timer)
-  timer = setInterval(() => document.hidden || refresh(), REFRESH_MS)
+  timer = setInterval(() => document.hidden || view !== 'conv' || refresh(), REFRESH_MS)
 }
 
 $('loginForm').addEventListener('submit', async (e) => {
@@ -499,10 +672,13 @@ $('loginForm').addEventListener('submit', async (e) => {
 
 $('logout').addEventListener('click', () => logout())
 
-// Enlaces directos (#<session_id>), también si cambia solo el hash con la página ya abierta.
+// Enlaces directos (#<session_id> o #archivos), también si cambia solo el hash con la página ya abierta.
 window.addEventListener('hashchange', () => {
+  if (!token) return
   const id = decodeURIComponent(location.hash.slice(1))
-  if (token && id && id !== current?.session_id) openConversation(id, { force: true })
+  if (id === FILES_HASH) return view === 'files' || showView('files')
+  if (view !== 'conv') showView('conv')
+  if (id && id !== current?.session_id) openConversation(id, { force: true })
 })
 
 if (token && author) api('/ping').then(start).catch(() => logout())

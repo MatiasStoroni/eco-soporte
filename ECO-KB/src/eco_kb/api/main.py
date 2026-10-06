@@ -12,6 +12,7 @@ from eco_kb.conversations import ConversationStore
 from eco_kb.db import make_pool
 from eco_kb.graph.builder import build_graph
 from eco_kb.graph.services import Services
+from eco_kb.kb_documents import DocumentStore
 from eco_kb.llm import GeminiEmbedder, make_chat_model
 from eco_kb.retrieval.store import PgChunkStore
 from eco_kb.settings import get_settings
@@ -30,6 +31,8 @@ async def lifespan(app: FastAPI):
     checkpointer.setup()
     conversations = ConversationStore(admin)
     conversations.setup()
+    documents = DocumentStore(admin, list(cfg.clients))
+    documents.setup()  # migración de la KB (manifiesto + RLS); idempotente y sin re-embeber
     services = Services(
         generator_llm=make_chat_model(s.llm_generator_model, s.llm_generator_thinking),
         grader_llm=make_chat_model(s.llm_grader_model, s.llm_grader_thinking),
@@ -41,6 +44,8 @@ async def lifespan(app: FastAPI):
     app.state.graph = build_graph(services, checkpointer)
     app.state.handoff = cfg.handoff
     app.state.conversations = conversations
+    app.state.documents = documents
+    app.state.kb_stores = (services.support_store, services.sales_store)  # para invalidar el catálogo
     app.state.admin_pool = admin
     yield
     for p in (admin, support, sales):

@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     # es más rápido que low y produce más borradores rechazados por el verificador (medido 2026-10-05).
     llm_generator_thinking: str = "low"
     llm_grader_thinking: str = ""
+    # Reformateo de documentos (eco_kb.ingest.restructure). Vacío = el modelo del generador.
+    llm_restructure_model: str = ""
     embedding_model: str = "gemini-embedding-001"
     embedding_dim: int = 768
 

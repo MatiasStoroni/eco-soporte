@@ -21,8 +21,10 @@ def is_supported(name: str, mime: str) -> bool:
             or n.endswith((".md", ".pdf", ".docx")))
 
 
-def extract_markdown(name: str, mime: str, data: bytes) -> str:
+def extract_with_pages(name: str, mime: str, data: bytes) -> tuple[str, list[int]]:
+    """(markdown, páginas de PDF sin texto extraíble). No falla si no hay texto: un PDF de imágenes devuelve ""."""
     n = name.lower()
+    empty: list[int] = []
     if mime == GOOGLE_DOC or mime in TEXT_MIMES or n.endswith(".md"):
         text = data.decode("utf-8-sig")
     elif mime == PDF or n.endswith(".pdf"):
@@ -32,15 +34,19 @@ def extract_markdown(name: str, mime: str, data: bytes) -> str:
 
         pages = [p.extract_text() or "" for p in PdfReader(io.BytesIO(data)).pages]
         text, empty = clean_pdf_pages(pages)
-        if empty and text.strip():
-            log.warning("%s: páginas sin texto extraíble (¿imágenes?): %s", name, empty)
     elif mime == DOCX or n.endswith(".docx"):
         import mammoth
 
         text = mammoth.convert_to_markdown(io.BytesIO(data)).value
     else:
         raise UnsupportedFile(f"{name} ({mime})")
-    text = text.strip()
+    return text.strip(), empty
+
+
+def extract_markdown(name: str, mime: str, data: bytes) -> str:
+    text, empty = extract_with_pages(name, mime, data)
     if not text:
         raise UnsupportedFile(f"{name}: sin texto extraíble (¿PDF escaneado?)")
+    if empty:
+        log.warning("%s: páginas sin texto extraíble (¿imágenes?): %s", name, empty)
     return text

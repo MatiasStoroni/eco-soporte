@@ -131,13 +131,21 @@ Regla de oro: **cada pregunta mala que reportes debe quedar añadida a `evals/qu
 9. **Cambié un documento y el bot no lo refleja**: hay que re-ingestar (`KB_DIR=docs/estructurados python -m uv run python -m eco_kb.ingest.run`)
    o esperar el sync de Drive; el catálogo del reescritor se cachea 5 min por proceso.
 10. **Cambié código y no cambia nada**: el contenedor/uvicorn corre código viejo. Reconstruye o reinicia.
+11. **Un cliente no ve un documento** (`no_documents` para un tipo, mientras otro tipo sí lo encuentra): revisá la
+    visibilidad en el panel (`/admin` → Archivos, filtro "¿Qué ve…? [tipo]"). Un archivo nuevo en una carpeta que no
+    es un tipo de cliente entra **sin habilitar**. Tildar y guardar aplica al instante, sin re-ingestar. No lo
+    "arregles" copiando el archivo a otra carpeta.
+12. **`retrieve` devuelve 0 fragmentos para todo**: la RLS falla cerrado si la consulta no fija `app.client_types`
+    (`_set_rls` en `retrieval/store.py`). Probá con `psql` como `rag_support_ro`: sin la variable da 0 filas.
 
 ## 6. Invariantes que NO debes romper
 
 - Los campos `is_registered, client_type, flow, retrieval_filter` solo los fija `validate_session` (guard
   `ProtectedFieldError`). Ningún nodo LLM puede modificarlos.
-- `audience` y `client_types` de cada chunk salen de la RUTA del documento, nunca del frontmatter/contenido.
-- Cada flujo consulta SOLO su partición con su rol de BD de solo lectura; el filtro `client_types ∩ {ct, common}` es duro.
+- `audience` sale de la RUTA del documento; `client_types`, del manifiesto `kb_documents` que edita el equipo en el
+  panel (la carpeta solo es la sugerencia inicial). Nunca del frontmatter/contenido.
+- Cada flujo consulta SOLO su partición con su rol de BD de solo lectura; el filtro `client_types ∩ {ct, common}` es
+  duro y además lo impone la base con RLS (`app.client_types`).
 - En ventas el CTA lo añade el código (`finalize_sales`, y las respuestas fijas de `nodes/redirects.py`), es la única
   URL de la respuesta; el LLM nunca inventa URLs.
 - El bot responde SOLO con lo que dicen los fragmentos; no inventa cifras, diluciones, tiempos ni códigos.
@@ -150,7 +158,8 @@ Regla de oro: **cada pregunta mala que reportes debe quedar añadida a `evals/qu
 - `src/eco_kb/graph/`: `builder.py` (grafo), `edges.py` (rutas puras), `prompts.py` (todos los prompts), `schemas.py`
   (salidas estructuradas), `state.py`, `services.py`, `nodes/{session,safety,intent,retrieval_nodes,generation,finalize,common}.py`.
 - `src/eco_kb/retrieval/{store,filters}.py`: búsqueda híbrida + RRF + filtros + catálogo.
-- `src/eco_kb/ingest/{loader,chunker,run}.py`: ingesta (embebe solo lo cambiado, borra huérfanos).
+- `src/eco_kb/ingest/{loader,chunker,run}.py`: ingesta (embebe solo contenido nuevo, reutiliza embeddings por hash,
+  borra huérfanos). `src/eco_kb/kb_documents.py`: manifiesto de visibilidad, migración (RLS) y store del panel.
 - `src/eco_kb/drive/`: sync con Google Drive y limpieza de PDF.
 - `src/eco_kb/api/main.py`: FastAPI. `evals/`: batería. `tests/`: unit, e2e (fakes), integration.
 - KB fuente (si está en tu copia): `docs/estructurados/{soporte,ventas}/{hotel,comun}/*.md` (Markdown con secciones `##`).

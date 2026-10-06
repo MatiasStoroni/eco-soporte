@@ -5,6 +5,7 @@ from eco_kb.config import load_config
 from eco_kb.db import make_pool
 from eco_kb.drive.client import DriveFile
 from eco_kb.drive.sync import SyncAborted, sync_once
+from eco_kb.kb_documents import setup
 from eco_kb.settings import get_settings
 from tests.integration.test_isolation_pg import HashEmbedder
 
@@ -36,12 +37,13 @@ def env():
     s = get_settings()
     cfg = load_config(s.clients_path, s.safety_path)
     pool = make_pool(s.database_url_admin, "t_drive", 3)
+    setup(pool)
     with pool.connection() as c:
         c.execute("DROP TABLE IF EXISTS kb_sources")
-        c.execute("TRUNCATE kb_chunks")
+        c.execute("TRUNCATE kb_chunks, kb_documents")
     yield pool, set(cfg.clients), HashEmbedder()
     with pool.connection() as c:
-        c.execute("TRUNCATE kb_chunks")
+        c.execute("TRUNCATE kb_chunks, kb_documents")
         c.execute("DROP TABLE IF EXISTS kb_sources")
     pool.close()
 
@@ -84,12 +86,12 @@ def test_bad_paths_and_formats_are_skipped_not_ingested(env):
     pool, types, emb = env
     d = FakeDrive()
     d.put("1", [], "suelto.md", "# x\ny")                       # en la raíz
-    d.put("2", ["Soporte", "Banco"], "a.md", "# x\ny")         # client_type desconocido
+    d.put("2", ["Soporte", "Equipos"], "a.md", "# a\ny")       # carpeta que no es un tipo: entra sin habilitar
     d.put("3", ["Soporte", "Hotel"], "ok.md", "# x\ny")
     rep = sync_once(d, "root", pool, emb, types)
-    assert rep.processed == ["support/hotel/ok.md"]
-    assert len(rep.skipped) == 1 and len(rep.failed) == 1
-    assert count(pool) == 1
+    assert sorted(rep.processed) == ["support/equipos/a.md", "support/hotel/ok.md"]
+    assert len(rep.skipped) == 1 and not rep.failed
+    assert count(pool) == 2 and count(pool, "client_types = '{}'") == 1
 
 
 def test_failed_download_keeps_previous_version(env):

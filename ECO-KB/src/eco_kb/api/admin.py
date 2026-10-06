@@ -1,4 +1,5 @@
-"""Panel de administración: revisar conversaciones, calificar respuestas y atender derivaciones.
+"""Panel de administración: revisar conversaciones, calificar respuestas, atender derivaciones y gestionar qué
+tipos de cliente consultan cada archivo de la KB.
 
 Protegido con una contraseña compartida (ADMIN_TOKEN, "admin" por defecto). Vacía = panel desactivado.
 """
@@ -7,8 +8,9 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 
-from eco_kb.api.schemas import HumanMessage, Review, StatusChange
+from eco_kb.api.schemas import DocumentVisibility, HumanMessage, Review, StatusChange
 from eco_kb.conversations import ConversationStore
+from eco_kb.kb_documents import DocumentStore, normalize_client_types
 from eco_kb.settings import get_settings
 
 
@@ -86,3 +88,33 @@ def review(message_id: int, body: Review, store: ConversationStore = Depends(_st
     if out is None:
         raise HTTPException(404, "Mensaje del bot no encontrado.")
     return out
+
+
+# --- archivos de la KB: visibilidad por tipo de cliente ---------------------------------------------------
+
+def _documents(request: Request) -> DocumentStore:
+    store = getattr(request.app.state, "documents", None)
+    if store is None:
+        raise HTTPException(503, "Gestión de archivos no disponible.")
+    return store
+
+
+@router.get("/documents")
+def list_documents(store: DocumentStore = Depends(_documents)):
+    """Los tipos salen de clients.yaml (más "common" = todos): la UI no los hardcodea."""
+    return {"client_types": store.options(), "documents": store.list()}
+
+
+@router.put("/documents/visibility")
+def set_document_visibility(body: DocumentVisibility, request: Request, store: DocumentStore = Depends(_documents)):
+    """Aplica al instante: actualiza el manifiesto y los fragmentos (sin re-embeber) y vacía la caché del catálogo."""
+    try:
+        types = normalize_client_types(body.client_types, store.client_types)
+        doc = store.set_visibility(body.audience, body.source_id, types, body.author)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    if doc is None:
+        raise HTTPException(404, "Archivo no encontrado.")
+    for kb_store in getattr(request.app.state, "kb_stores", ()):
+        kb_store.invalidate_catalog()
+    return doc

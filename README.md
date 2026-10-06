@@ -12,8 +12,8 @@ docker compose up -d --build
 
 - Vista: `http://<ip>:8088` (su servidor reenvía `/api/*` a la API, mismo origen, sin CORS; acepta cualquier `Host`,
   así que puedes ponerle delante tu propio proxy).
-- Panel de administración (conversaciones, revisión de respuestas y derivaciones a una persona):
-  `http://<ip>:8088/admin`. Contraseña: `admin` (se cambia con `ADMIN_TOKEN` en `ECO-KB/.env`).
+- Panel de administración (conversaciones, revisión de respuestas, derivaciones a una persona y qué tipos de
+  cliente consultan cada archivo de la KB): `http://<ip>:8088/admin`. Contraseña: `admin` (se cambia con `ADMIN_TOKEN` en `ECO-KB/.env`).
 - API (solo depuración, localhost): `http://localhost:8000/docs`.
 - Levanta su propio Postgres con pgvector, el contenedor `eco-db` (sin puerto publicado; volumen `eco_db_data`).
   La primera vez crea la base `ecokb`, el admin `eco` y los roles de solo lectura (`ECO-KB/sql/init-db.sh`).
@@ -24,14 +24,19 @@ docker compose up -d --build
 docker compose run --rm -e KB_DIR=docs/estructurados -v ./ECO-KB/docs:/app/docs:ro api python -m eco_kb.ingest.run
 ```
 
+La API aplica sola la migración de la KB al arrancar (manifiesto `kb_documents` + RLS), sin re-embeber. Después de
+ingerir, revisá en el panel → **Archivos** qué tipos de cliente consultan cada documento: un archivo nuevo arranca
+con la visibilidad que sugiere su carpeta.
+
 Consultar la base: `docker exec -it eco-db psql -U eco -d ecokb`.
 Parar: `docker compose down` (con `-v` borra también la base). Logs: `docker compose logs -f api web db`.
 
 ## Panel de administración
 
 `http://<ip>:8088/admin`, contraseña `admin` (se cambia con `ADMIN_TOKEN` en `ECO-KB/.env`). Sirve para revisar
-las conversaciones, calificar las respuestas del bot y atender derivaciones a una persona. Cómo se usa y cómo
-está implementado (tablas, estados de la derivación, polling, endpoints):
+las conversaciones, calificar las respuestas del bot, atender derivaciones a una persona y, en **Archivos**,
+elegir qué tipos de cliente consultan cada documento (aplica al instante). Cómo se usa y cómo está implementado
+(tablas, estados de la derivación, polling, endpoints):
 [ECO-KB/README.md → Panel de administración](ECO-KB/README.md#panel-de-administración-y-derivación-a-humano).
 
 ## Resetear datos
@@ -40,7 +45,7 @@ La base (volumen `eco_db_data`) guarda tres cosas distintas:
 
 | Qué | Tablas | Se recupera |
 |---|---|---|
-| Base de conocimiento ingerida (fragmentos y embeddings) | `kb_chunks*` | Volviendo a ingerir: los documentos fuente están en git (`ECO-KB/docs/estructurados`), pero recalcular los embeddings consume cuota de Gemini |
+| Base de conocimiento ingerida (fragmentos, embeddings y la visibilidad elegida en el panel) | `kb_chunks*`, `kb_documents`, `kb_schema_migrations` | Volviendo a ingerir: los documentos fuente están en git (`ECO-KB/docs/estructurados`), pero recalcular los embeddings consume cuota de Gemini y la visibilidad hay que volver a elegirla en el panel |
 | Memoria del bot por sesión (checkpointer de LangGraph) | `checkpoints`, `checkpoint_blobs`, `checkpoint_writes` | No hace falta: es historial de conversaciones |
 | Conversaciones del panel, con calificaciones y notas | `chat_conversations`, `chat_messages` | No: se pierden |
 

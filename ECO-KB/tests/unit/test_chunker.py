@@ -24,8 +24,11 @@ def test_size_split_with_overlap():
 def test_derive_from_path():
     assert derive_from_path(Path("support/_common/x.md"), VALID) == ("support", ["common"])
     assert derive_from_path(Path("sales/hotel/x.md"), VALID) == ("sales", ["hotel"])
+    assert derive_from_path(Path("soporte/comun/x.md"), VALID) == ("support", ["common"])
+    # Una carpeta que no es un tipo de cliente arranca sin habilitar (la visibilidad se elige en el panel).
+    assert derive_from_path(Path("sales/equipos/x.md"), VALID) == ("sales", [])
     with pytest.raises(IngestError):
-        derive_from_path(Path("sales/banco/x.md"), VALID)
+        derive_from_path(Path("support/x.md"), VALID)
     with pytest.raises(IngestError):
         derive_from_path(Path("admin/hotel/x.md"), VALID)
 

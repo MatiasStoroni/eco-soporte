@@ -42,6 +42,10 @@
             <div class="brand-sub">Conversaciones del asistente</div>
           </div>
         </div>
+        <nav id="views" class="tabs views" aria-label="Secciones del panel">
+          <button type="button" data-view="conv" class="on">Conversaciones</button>
+          <button type="button" data-view="files">Archivos</button>
+        </nav>
         <div id="stats" class="stats"></div>
         <div class="me">
           <span id="me"></span>
@@ -87,6 +91,24 @@
           </div>
         </main>
       </div>
+
+      <!-- Archivos de la KB: qué tipos de cliente consulta cada uno -->
+      <main id="files" class="files" hidden>
+        <div class="files-inner">
+          <div class="files-head">
+            <h2>Archivos de la base de conocimiento</h2>
+            <p class="muted">Tildá qué tipos de cliente consultan cada archivo. Los cambios aplican al instante.
+              Soporte y ventas son bases separadas: la audiencia la define la carpeta.</p>
+          </div>
+          <div class="files-filters">
+            <input id="fq" type="search" placeholder="Buscar por título o ruta…" aria-label="Buscar archivos" />
+            <label class="see">¿Qué ve…?
+              <select id="fsee"><option value="">Cualquier tipo</option></select>
+            </label>
+          </div>
+          <div id="fileList" class="file-list" aria-live="polite"></div>
+        </div>
+      </main>
     </div>
     <script type="module" src="/src/admin.js"></script>
   </body>

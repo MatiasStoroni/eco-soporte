@@ -24,6 +24,12 @@ def _vec_literal(vec: list[float]) -> str:
     return "[" + ",".join(f"{x:.8f}" for x in vec) + "]"
 
 
+def _set_rls(conn, f: RetrievalFilter) -> None:
+    """Variable que lee la política RLS de la partición (ver kb_documents.MIGRATIONS). Local a la transacción:
+    no queda en la conexión cuando vuelve al pool. Sin ella, la base no devuelve ningún fragmento."""
+    conn.execute("SELECT set_config('app.client_types', %s, true)", (",".join(f.allowed_client_types),))
+
+
 def rrf_fuse(vector_rows: list[dict], fts_rows: list[dict], top_k: int) -> list[dict]:
     fused: dict[str, dict] = {}
     for rows, key in ((vector_rows, "vec"), (fts_rows, "fts")):
@@ -66,7 +72,8 @@ class PgChunkStore:
             "SELECT {cols}, ts_rank_cd(tsv, websearch_to_tsquery('spanish', %(q)s)) AS score FROM {t} "
             "WHERE {w} AND tsv @@ websearch_to_tsquery('spanish', %(q)s) ORDER BY score DESC LIMIT %(n)s"
         ).format(cols=sql.SQL(_COLS), t=self._table, w=where)
-        with self._pool.connection() as conn:
+        with self._pool.connection() as conn, conn.transaction():
+            _set_rls(conn, f)
             vec_rows = conn.execute(vec_q, params).fetchall()
             fts_rows = conn.execute(fts_q, params).fetchall()
 
@@ -91,7 +98,8 @@ class PgChunkStore:
             "WHERE client_types && %(types)s::text[] AND status = %(status)s AND language = %(lang)s "
             "ORDER BY title, chunk_id"
         ).format(t=self._table)
-        with self._pool.connection() as conn:
+        with self._pool.connection() as conn, conn.transaction():
+            _set_rls(conn, f)
             rows = conn.execute(q, {"types": list(f.allowed_client_types), "status": f.status,
                                     "lang": f.language}).fetchall()
         docs: dict[str, dict] = {}
@@ -102,3 +110,7 @@ class PgChunkStore:
         result = list(docs.values())
         self._catalog_cache[key] = (time.monotonic(), result)
         return result
+
+    def invalidate_catalog(self) -> None:
+        """Cambió la visibilidad de algún documento (panel): el catálogo se recalcula en la próxima consulta."""
+        self._catalog_cache.clear()
